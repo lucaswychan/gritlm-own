@@ -32,26 +32,27 @@ LAUNCHER="accelerate launch \
     --tee 1 \
     "
 
-TRAIN_DATA=/data/wychanbu/test_data/ # replace with the directory of your training data
+TRAIN_DATA=/data/wychanbu/re_data/ # replace with the directory of your training data
 
 export CMD=" \
     -m training.run \
-    --output_dir /data/wychanbu/re_models/Qwen2.5_7B_gritlm/ \
+    --output_dir /data/wychanbu/re_models/Qwen2.5_7B_gritlm_msmarco_nq/ \
     --model_name_or_path Qwen/Qwen2.5-7B \
     --train_data $TRAIN_DATA \
     --learning_rate 2e-5 \
-    --lr_scheduler_type constant_with_warmup \
-    --warmup_ratio 0.06 \
+    --weight_decay 0.01 \
+    --lr_scheduler_type cosine \
+    --warmup_ratio 0.03 \
     --num_train_epochs 1 \
-    --per_device_train_batch_size 4 \
-    --gradient_accumulation_steps 4 \
+    --per_device_train_batch_size 8 \
+    --gradient_accumulation_steps 2 \
     --dataloader_drop_last \
     --normalized \
     --temperature 0.02 \
     --train_group_size 2 \
     --negatives_cross_device \
-    --query_max_len 2048 \
-    --passage_max_len 2048 \
+    --query_max_len 512 \
+    --passage_max_len 512 \
     --mode embedding \
     --logging_steps 1 \
     --bf16 \
@@ -60,7 +61,7 @@ export CMD=" \
     --attn bbcc \
     --gradient_checkpointing \
     --attn_implementation sdpa \
-    --save_steps 500 
+    --save_steps 500 \ 
     --lora
     "
 

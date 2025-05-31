@@ -14,19 +14,19 @@ from .arguments import CustomTrainingArguments, DataArguments, ModelArguments
 from .data import CustomCollator, CustomDataset, CustomRandomSampler
 from .model import GritLMTrainModel
 
-BASE_BOS: str = "<s>"
+BASE_BOS: str = ""
 TURN_SEP: str = "\n"
 
-USER_BOS: str = "<|user|>\n"
+USER_BOS: str = ""
 USER_EOS: str = "" # "</s>" for Zephyr format
 
-EMBED_BOS: str = "\n<|embed|>\n"
+EMBED_BOS: str = ""
 # Am embed eos is useless as there is no generative loss on it so it won't be learned
 # & it does not add anything new; It only makes sense for lasttoken pooling
 EMBED_EOS: str = ""
 
-ASSISTANT_BOS: str = "\n<|assistant|>\n"
-ASSISTANT_EOS: str = "</s>"
+ASSISTANT_BOS: str = ""
+ASSISTANT_EOS: str = ""
 
 logger = logging.getLogger(__name__)
 
@@ -77,11 +77,22 @@ def main():
         training_args.device,
         training_args.n_gpu,
         bool(training_args.local_rank != -1),
-        training_args.fp16,
+        training_args.bf16,
     )
-
+    
     if training_args.gradient_checkpointing:
         training_args.gradient_checkpointing_kwargs = {"use_reentrant": False}
+        # Additional stability for LoRA + gradient checkpointing
+        # if hasattr(training_args, 'gradient_checkpointing_kwargs'):
+        #     training_args.gradient_checkpointing_kwargs.update({
+        #         "use_reentrant": False,
+        #         "preserve_rng_state": True
+        #     })
+        # else:
+        #     training_args.gradient_checkpointing_kwargs = {
+        #         "use_reentrant": False,
+        #         "preserve_rng_state": True
+        #     }
 
     logger.info("Training/evaluation parameters %s", training_args)
     logger.info("Model parameters %s", model_args)
@@ -164,55 +175,17 @@ def main():
             ds_name_to_samples[file.split("/")[-1]] = len(tmp_ds)
             train_ds.append(tmp_ds)
             continue
-        if training_args.mode in ["unified", "generative"] and "text" in tmp_ds.features:
-            if isinstance(tmp_ds[0]['text'], (tuple, list)):
-                logger.info(f"Filtering out generative samples with too long instructions for {file}")
-                # Use passage_max_len, as this is the seq len limit for the entire generative snippet
-                num_proc = max(multiprocessing.cpu_count()-2, 1) if tmp_ds_len > 5000 else 1
-                tmp_ds = tmp_ds.filter(
-                    lambda ex: len(tokenizer.tokenize(USER_BOS + ex["text"][0] + USER_EOS + ASSISTANT_BOS)) < data_args.generative_max_len,
-                    num_proc=num_proc,
-                    load_from_cache_file=True,
-                )
-            ds_name_to_samples[file.split("/")[-1]] = len(tmp_ds)
-            train_ds.append(tmp_ds)
-            continue
         logger.info("Skipping dataset %s as its type could not be identified", file)
     if training_args.mode == "embedding":
         ds_embedding_lens = [len(t) for t in train_ds]
         ds = datasets.concatenate_datasets(train_ds)
         logger.info("Embedding mode: %d samples", len(ds))
-    elif training_args.mode == "generative":
-        ds = datasets.concatenate_datasets(train_ds)
-        logger.info("Generative mode: %d samples", len(ds))
-    elif training_args.mode == "unified":
-        ds_embedding = datasets.concatenate_datasets([
-            t for t in train_ds if "query" in t.features
-        ])
-        ds_generative = datasets.concatenate_datasets([
-            t for t in train_ds if "text" in t.features
-        ])
-        logger.info("Unified mode: %d embedding samples, %d generative samples",
-            len(ds_embedding), len(ds_generative)
-        )
-        for t in train_ds:
-            if "query" in t.features:
-                num_samples = len(t)
-                ds_embedding_lens.append(num_samples)
-        ds = [ds_embedding, ds_generative]
     else:
         raise NotImplementedError(training_args.mode)
 
     os.makedirs(training_args.output_dir, exist_ok=True)
     with open(os.path.join(training_args.output_dir, "dataset_num_samples.json"), "w") as f:
         json.dump(ds_name_to_samples, f)
-
-    if training_args.per_device_generative_bs is not None:
-        assert training_args.mode == "unified", "Generative batch size is only supported in unified mode"
-        assert training_args.per_device_generative_bs < training_args.per_device_train_batch_size, \
-            "Generative batch size must be smaller than regular batch size"
-        logger.info("Using generative batch size %d per device", training_args.per_device_generative_bs)
-
 
     quantization_config, load_in_4bit = None, False
     if training_args.qlora:
@@ -275,14 +248,15 @@ def main():
         peft_config = LoraConfig(
             inference_mode=False, 
             r=16, 
-            lora_alpha=64,
+            lora_alpha=32,
             lora_dropout=0.1,
-            target_modules=["q_proj", "o_proj", "v_proj", "k_proj", "w1", "w2", "w3"]
+            target_modules="all-linear",
+            task_type=TaskType.FEATURE_EXTRACTION
         )
         model.model.enable_input_require_grads()
         model.model = get_peft_model(model.model, peft_config)
         model.model.print_trainable_parameters()
-
+        
     train_dataset = CustomDataset(
         ds,
         args=data_args,
@@ -341,76 +315,6 @@ def main():
             total_batch_size=total_bs, ds_lens=ds_embedding_lens,
             _num_samples=sum(ds_embedding_lens), data_source=train_dataset,
         )
-
-    if training_args.mode == "unified":
-        # Track all losses
-        from transformers.integrations import WandbCallback
-        from transformers.integrations.integration_utils import rewrite_logs
-        from transformers.trainer_pt_utils import distributed_concat
-        class WandbCustomCallback(WandbCallback):
-            def on_log(self, args, state, control, model=None, logs=None, **kwargs):
-                if self._wandb is None: return
-                if not self._initialized: self.setup(args, state, model)
-                if hasattr(state, "loss_emb") and hasattr(state, "loss_gen"):
-                    # Gather & avg across gpus like for actual loss
-                    # https://github.com/huggingface/transformers/blob/bc72b4e2cdcbc80d5f56731f35dbc9c18b4c8de6/src/transformers/trainer.py#L2257
-                    if (args.distributed_state is not None and args.distributed_state.distributed_type != "NO") or (
-                        args.distributed_state is None and args.local_rank != -1):
-                        state.loss_emb = distributed_concat(state.loss_emb).mean().item()
-                        state.loss_gen = distributed_concat(state.loss_gen).mean().item()
-                    else:
-                        state.loss_emb = state.loss_emb.mean().item()
-                        state.loss_gen = state.loss_gen.mean().item()
-                    if state.is_world_process_zero:
-                        self._wandb.log({
-                            **rewrite_logs(logs),
-                            "train/global_step": state.global_step,
-                            "train/loss_emb": state.loss_emb,
-                            "train/loss_gen": state.loss_gen,
-                        })
-                    del state.loss_emb
-                    del state.loss_gen
-                else:
-                    if state.is_world_process_zero:
-                        self._wandb.log({
-                            **rewrite_logs(logs),
-                            "train/global_step": state.global_step,
-                        })
-
-        trainer.add_callback(WandbCustomCallback())
-
-        # Copied from below & added loss_emb/loss_gen
-        # https://github.com/huggingface/transformers/blob/cc3e4781854a52cf090ffde28d884a527dab6708/src/transformers/trainer.py#L2699
-        def training_step(self, model, inputs):
-            model.train()
-            inputs = self._prepare_inputs(inputs)
-
-            with self.compute_loss_context_manager():
-                out = self.compute_loss(model, inputs, return_outputs=True)
-                loss = out[0]
-                loss_emb = out[1]["loss_emb"]
-                loss_gen = out[1]["loss_gen"]
-
-            if self.args.n_gpu > 1:
-                loss = loss.mean()  # mean() to average on multi-gpu parallel training
-                loss_emb = loss_emb.mean()
-                loss_gen = loss_gen.mean()
-
-            if self.use_apex:
-                with amp.scale_loss(loss, self.optimizer) as scaled_loss:
-                    scaled_loss.backward()
-            else:
-                self.accelerator.backward(loss) # Includes normalizing by gas
-
-            self.state.loss_emb = getattr(self.state, "loss_emb", torch.tensor(0.0).to(loss.device))
-            self.state.loss_gen = getattr(self.state, "loss_gen", torch.tensor(0.0).to(loss.device))
-            self.state.loss_emb += loss_emb.detach() / self.args.gradient_accumulation_steps
-            self.state.loss_gen += loss_gen.detach() / self.args.gradient_accumulation_steps
-            
-            return loss.detach() / self.args.gradient_accumulation_steps
-
-        # __get__ is needed to bind the method to the Trainer instance
-        trainer.training_step = training_step.__get__(trainer)
 
     Path(training_args.output_dir).mkdir(parents=True, exist_ok=True)
 

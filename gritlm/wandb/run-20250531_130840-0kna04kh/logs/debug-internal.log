@@ -1,0 +1,15 @@
+{"time":"2025-05-31T13:08:40.833632054+08:00","level":"INFO","msg":"stream: starting","core version":"0.19.11","symlink path":"/home/wychanbu/gritlm/gritlm/wandb/run-20250531_130840-0kna04kh/logs/debug-core.log"}
+{"time":"2025-05-31T13:08:41.142212447+08:00","level":"INFO","msg":"created new stream","id":"0kna04kh"}
+{"time":"2025-05-31T13:08:41.142278651+08:00","level":"INFO","msg":"stream: started","id":"0kna04kh"}
+{"time":"2025-05-31T13:08:41.142310281+08:00","level":"INFO","msg":"writer: Do: started","stream_id":"0kna04kh"}
+{"time":"2025-05-31T13:08:41.1423682+08:00","level":"INFO","msg":"handler: started","stream_id":"0kna04kh"}
+{"time":"2025-05-31T13:08:41.142317134+08:00","level":"INFO","msg":"sender: started","stream_id":"0kna04kh"}
+{"time":"2025-05-31T13:08:41.383697373+08:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-05-31T13:09:43.665112957+08:00","level":"INFO","msg":"stream: closing","id":"0kna04kh"}
+{"time":"2025-05-31T13:09:43.665165235+08:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-05-31T13:09:43.665272387+08:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-05-31T13:09:44.403208901+08:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-05-31T13:09:44.637860901+08:00","level":"INFO","msg":"handler: closed","stream_id":"0kna04kh"}
+{"time":"2025-05-31T13:09:44.637952384+08:00","level":"INFO","msg":"sender: closed","stream_id":"0kna04kh"}
+{"time":"2025-05-31T13:09:44.637957503+08:00","level":"INFO","msg":"writer: Close: closed","stream_id":"0kna04kh"}
+{"time":"2025-05-31T13:09:44.638198517+08:00","level":"INFO","msg":"stream: closed","id":"0kna04kh"}

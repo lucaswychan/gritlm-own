@@ -1,0 +1,36 @@
+  0%|                                                                                                                     | 0/1510 [00:00<?, ?it/s]Traceback (most recent call last):
+  File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/home/wychanbu/gritlm/gritlm/training/run.py", line 379, in <module>
+    main()
+  File "/home/wychanbu/gritlm/gritlm/training/run.py", line 361, in main
+    trainer.train()
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/transformers/trainer.py", line 1539, in train
+    return inner_training_loop(
+  File "/home/wychanbu/gritlm/gritlm/training/gradcache_trainer.py", line 691, in _inner_training_loop
+    loss_emb = gc(inputs["query"], inputs["passage"], no_sync_except_last=no_sync_except_last)
+  File "/home/wychanbu/gritlm/gritlm/training/GradCache/src/grad_cache/grad_cache.py", line 70, in __call__
+    return self.cache_step(*args, **kwargs)
+  File "/home/wychanbu/gritlm/gritlm/training/GradCache/src/grad_cache/grad_cache.py", line 262, in cache_step
+    assert all(map(lambda m: isinstance(m, (torch.distributed.fsdp.FullyShardedDataParallel, nn.parallel.DistributedDataParallel)), self.models)), \
+AssertionError: Some of models are not wrapped in DistributedDataParallel. Make sure you are running DDP with proper initializations. Type: <class 'deepspeed.runtime.engine.DeepSpeedEngine'>
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+[rank0]:     return _run_code(code, main_globals, None,
+[rank0]:   File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+[rank0]:     exec(code, run_globals)
+[rank0]:   File "/home/wychanbu/gritlm/gritlm/training/run.py", line 379, in <module>
+[rank0]:     main()
+[rank0]:   File "/home/wychanbu/gritlm/gritlm/training/run.py", line 361, in main
+[rank0]:     trainer.train()
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/transformers/trainer.py", line 1539, in train
+[rank0]:     return inner_training_loop(
+[rank0]:   File "/home/wychanbu/gritlm/gritlm/training/gradcache_trainer.py", line 691, in _inner_training_loop
+[rank0]:     loss_emb = gc(inputs["query"], inputs["passage"], no_sync_except_last=no_sync_except_last)
+[rank0]:   File "/home/wychanbu/gritlm/gritlm/training/GradCache/src/grad_cache/grad_cache.py", line 70, in __call__
+[rank0]:     return self.cache_step(*args, **kwargs)
+[rank0]:   File "/home/wychanbu/gritlm/gritlm/training/GradCache/src/grad_cache/grad_cache.py", line 262, in cache_step
+[rank0]:     assert all(map(lambda m: isinstance(m, (torch.distributed.fsdp.FullyShardedDataParallel, nn.parallel.DistributedDataParallel)), self.models)), \
+[rank0]: AssertionError: Some of models are not wrapped in DistributedDataParallel. Make sure you are running DDP with proper initializations. Type: <class 'deepspeed.runtime.engine.DeepSpeedEngine'>

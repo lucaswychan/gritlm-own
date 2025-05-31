@@ -1,0 +1,11 @@
+{"time":"2025-05-31T11:56:43.967430712+08:00","level":"INFO","msg":"stream: starting","core version":"0.19.11","symlink path":"/home/wychanbu/gritlm/gritlm/wandb/run-20250531_115643-hxppq28t/logs/debug-core.log"}
+{"time":"2025-05-31T11:56:44.271198549+08:00","level":"INFO","msg":"created new stream","id":"hxppq28t"}
+{"time":"2025-05-31T11:56:44.271248373+08:00","level":"INFO","msg":"stream: started","id":"hxppq28t"}
+{"time":"2025-05-31T11:56:44.271275725+08:00","level":"INFO","msg":"sender: started","stream_id":"hxppq28t"}
+{"time":"2025-05-31T11:56:44.271271106+08:00","level":"INFO","msg":"writer: Do: started","stream_id":"hxppq28t"}
+{"time":"2025-05-31T11:56:44.271313546+08:00","level":"INFO","msg":"handler: started","stream_id":"hxppq28t"}
+{"time":"2025-05-31T11:56:44.566350416+08:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-05-31T11:56:44.882596466+08:00","level":"INFO","msg":"stream: closing","id":"hxppq28t"}
+{"time":"2025-05-31T11:56:44.882644076+08:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-05-31T11:56:44.882674133+08:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-05-31T11:56:46.31655827+08:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}

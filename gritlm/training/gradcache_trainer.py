@@ -178,9 +178,9 @@ class GradCacheTrainer(Trainer):
         with self.compute_loss_context_manager():
             if get_preps:
                 out = model(*args, **kwargs)
-                loss, reps = out.loss, out.p_reps
+                loss, reps = out.loss.to(model.model.dtype), out.p_reps.to(model.model.dtype)
             else:
-                loss = model(*args, **kwargs).loss
+                loss = model(*args, **kwargs).loss.to(model.model.dtype)
             if loss_mult is not None:
                 loss = loss * loss_mult
         if self.args.n_gpu > 1:
@@ -584,6 +584,7 @@ class GradCacheTrainer(Trainer):
                         if self.split_emb:
                             # Do backprop on passages first as they are more expensive
                             # & we can reuse them this way
+                            # logger.info(f"model dtype: {model.model.dtype}")
                             loss_emb_p, p_reps = self.get_loss_no_gas(
                                 model=model,
                                 query=inputs["query"], 
@@ -600,6 +601,8 @@ class GradCacheTrainer(Trainer):
                                 p_grad=False,
                                 #loss_mult=1/3,
                             )
+                            # logger.info(f"loss_emb_p dtype: {loss_emb_p.dtype}")
+                            # logger.info(f"loss_emb_q dtype: {loss_emb_q.dtype}")
 
                             assert torch.allclose(loss_emb_q, loss_emb_p), f"{loss_emb_q} != {loss_emb_p}"
                             loss_emb = loss_emb_q

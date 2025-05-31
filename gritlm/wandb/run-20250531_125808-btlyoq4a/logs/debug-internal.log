@@ -1,0 +1,11 @@
+{"time":"2025-05-31T12:58:08.372966291+08:00","level":"INFO","msg":"stream: starting","core version":"0.19.11","symlink path":"/home/wychanbu/gritlm/gritlm/wandb/run-20250531_125808-btlyoq4a/logs/debug-core.log"}
+{"time":"2025-05-31T12:58:08.689388831+08:00","level":"INFO","msg":"created new stream","id":"btlyoq4a"}
+{"time":"2025-05-31T12:58:08.689460026+08:00","level":"INFO","msg":"stream: started","id":"btlyoq4a"}
+{"time":"2025-05-31T12:58:08.689469714+08:00","level":"INFO","msg":"writer: Do: started","stream_id":"btlyoq4a"}
+{"time":"2025-05-31T12:58:08.689496264+08:00","level":"INFO","msg":"sender: started","stream_id":"btlyoq4a"}
+{"time":"2025-05-31T12:58:08.689511884+08:00","level":"INFO","msg":"handler: started","stream_id":"btlyoq4a"}
+{"time":"2025-05-31T12:58:08.949872483+08:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-05-31T12:59:12.283743586+08:00","level":"INFO","msg":"stream: closing","id":"btlyoq4a"}
+{"time":"2025-05-31T12:59:12.28381446+08:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-05-31T12:59:12.283876868+08:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-05-31T12:59:13.034216546+08:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}

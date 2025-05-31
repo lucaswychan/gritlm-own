@@ -1,0 +1,15 @@
+{"time":"2025-05-31T13:02:51.848911521+08:00","level":"INFO","msg":"stream: starting","core version":"0.19.11","symlink path":"/home/wychanbu/gritlm/gritlm/wandb/run-20250531_130251-gvj9b8gh/logs/debug-core.log"}
+{"time":"2025-05-31T13:02:52.152715502+08:00","level":"INFO","msg":"created new stream","id":"gvj9b8gh"}
+{"time":"2025-05-31T13:02:52.152792497+08:00","level":"INFO","msg":"stream: started","id":"gvj9b8gh"}
+{"time":"2025-05-31T13:02:52.152794641+08:00","level":"INFO","msg":"writer: Do: started","stream_id":"gvj9b8gh"}
+{"time":"2025-05-31T13:02:52.152810531+08:00","level":"INFO","msg":"handler: started","stream_id":"gvj9b8gh"}
+{"time":"2025-05-31T13:02:52.152842502+08:00","level":"INFO","msg":"sender: started","stream_id":"gvj9b8gh"}
+{"time":"2025-05-31T13:02:52.463243346+08:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-05-31T13:03:54.758512078+08:00","level":"INFO","msg":"stream: closing","id":"gvj9b8gh"}
+{"time":"2025-05-31T13:03:54.758583323+08:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-05-31T13:03:54.758640561+08:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-05-31T13:03:55.954674797+08:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-05-31T13:03:56.18691+08:00","level":"INFO","msg":"handler: closed","stream_id":"gvj9b8gh"}
+{"time":"2025-05-31T13:03:56.187018054+08:00","level":"INFO","msg":"sender: closed","stream_id":"gvj9b8gh"}
+{"time":"2025-05-31T13:03:56.187002294+08:00","level":"INFO","msg":"writer: Close: closed","stream_id":"gvj9b8gh"}
+{"time":"2025-05-31T13:03:56.187272856+08:00","level":"INFO","msg":"stream: closed","id":"gvj9b8gh"}

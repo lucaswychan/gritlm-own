@@ -1,0 +1,169 @@
+  0%|                                                                                                                     | 0/1510 [00:00<?, ?it/s]Traceback (most recent call last):
+  File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/home/wychanbu/gritlm/gritlm/training/run.py", line 368, in <module>
+    main()
+  File "/home/wychanbu/gritlm/gritlm/training/run.py", line 350, in main
+    trainer.train()
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/transformers/trainer.py", line 1539, in train
+    return inner_training_loop(
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/transformers/trainer.py", line 1869, in _inner_training_loop
+    tr_loss_step = self.training_step(model, inputs)
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/transformers/trainer.py", line 2781, in training_step
+    self.accelerator.backward(loss)
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/accelerate/accelerator.py", line 2143, in backward
+    self.deepspeed_engine_wrapped.backward(loss, **kwargs)
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/accelerate/utils/deepspeed.py", line 166, in backward
+    self.engine.backward(loss, **kwargs)
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+    ret_val = func(*args, **kwargs)
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/deepspeed/runtime/engine.py", line 2216, in backward
+    self._do_optimizer_backward(loss, retain_graph)
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/deepspeed/runtime/engine.py", line 2162, in _do_optimizer_backward
+    self.optimizer.backward(loss, retain_graph=retain_graph)
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+    ret_val = func(*args, **kwargs)
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/deepspeed/runtime/zero/stage3.py", line 2293, in backward
+    self.loss_scaler.backward(loss.float(), retain_graph=retain_graph)
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/deepspeed/runtime/fp16/loss_scaler.py", line 63, in backward
+    scaled_loss.backward(retain_graph=retain_graph)
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/_tensor.py", line 648, in backward
+    torch.autograd.backward(
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/autograd/__init__.py", line 353, in backward
+    _engine_run_backward(
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/autograd/graph.py", line 824, in _engine_run_backward
+    return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/autograd/function.py", line 307, in apply
+    return user_fn(self, *args)
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/amp/autocast_mode.py", line 556, in decorate_bwd
+    return bwd(*args, **kwargs)
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/deepspeed/runtime/zero/linear.py", line 80, in backward
+    input, weight, bias = ctx.saved_tensors
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/utils/checkpoint.py", line 1128, in unpack_hook
+    frame.check_recomputed_tensors_match(gid)
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/utils/checkpoint.py", line 902, in check_recomputed_tensors_match
+    raise CheckpointError(
+torch.utils.checkpoint.CheckpointError: torch.utils.checkpoint: Recomputed values for the following tensors have different metadata than during the forward pass.
+tensor at position 4:
+saved metadata: {'shape': torch.Size([3584]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+recomputed metadata: {'shape': torch.Size([0]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+tensor at position 6:
+saved metadata: {'shape': torch.Size([3584, 3584]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+recomputed metadata: {'shape': torch.Size([0]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+tensor at position 7:
+saved metadata: {'shape': torch.Size([3584]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+recomputed metadata: {'shape': torch.Size([0]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+tensor at position 14:
+saved metadata: {'shape': torch.Size([512, 3584]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+recomputed metadata: {'shape': torch.Size([0]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+tensor at position 15:
+saved metadata: {'shape': torch.Size([512]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+recomputed metadata: {'shape': torch.Size([0]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+tensor at position 22:
+saved metadata: {'shape': torch.Size([512, 3584]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+recomputed metadata: {'shape': torch.Size([0]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+tensor at position 23:
+saved metadata: {'shape': torch.Size([512]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+recomputed metadata: {'shape': torch.Size([0]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+tensor at position 42:
+saved metadata: {'shape': torch.Size([3584, 3584]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+recomputed metadata: {'shape': torch.Size([0]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+tensor at position 52:
+saved metadata: {'shape': torch.Size([3584]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+recomputed metadata: {'shape': torch.Size([0]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+tensor at position 54:
+saved metadata: {'shape': torch.Size([18944, 3584]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+recomputed metadata: {'shape': torch.Size([0]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+tensor at position 62:
+saved metadata: {'shape': torch.Size([18944, 3584]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+recomputed metadata: {'shape': torch.Size([0]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+tensor at position 71:
+saved metadata: {'shape': torch.Size([3584, 18944]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+recomputed metadata: {'shape': torch.Size([0]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+[rank0]:     return _run_code(code, main_globals, None,
+[rank0]:   File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+[rank0]:     exec(code, run_globals)
+[rank0]:   File "/home/wychanbu/gritlm/gritlm/training/run.py", line 368, in <module>
+[rank0]:     main()
+[rank0]:   File "/home/wychanbu/gritlm/gritlm/training/run.py", line 350, in main
+[rank0]:     trainer.train()
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/transformers/trainer.py", line 1539, in train
+[rank0]:     return inner_training_loop(
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/transformers/trainer.py", line 1869, in _inner_training_loop
+[rank0]:     tr_loss_step = self.training_step(model, inputs)
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/transformers/trainer.py", line 2781, in training_step
+[rank0]:     self.accelerator.backward(loss)
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/accelerate/accelerator.py", line 2143, in backward
+[rank0]:     self.deepspeed_engine_wrapped.backward(loss, **kwargs)
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/accelerate/utils/deepspeed.py", line 166, in backward
+[rank0]:     self.engine.backward(loss, **kwargs)
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank0]:     ret_val = func(*args, **kwargs)
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/deepspeed/runtime/engine.py", line 2216, in backward
+[rank0]:     self._do_optimizer_backward(loss, retain_graph)
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/deepspeed/runtime/engine.py", line 2162, in _do_optimizer_backward
+[rank0]:     self.optimizer.backward(loss, retain_graph=retain_graph)
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/deepspeed/utils/nvtx.py", line 20, in wrapped_fn
+[rank0]:     ret_val = func(*args, **kwargs)
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/deepspeed/runtime/zero/stage3.py", line 2293, in backward
+[rank0]:     self.loss_scaler.backward(loss.float(), retain_graph=retain_graph)
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/deepspeed/runtime/fp16/loss_scaler.py", line 63, in backward
+[rank0]:     scaled_loss.backward(retain_graph=retain_graph)
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/_tensor.py", line 648, in backward
+[rank0]:     torch.autograd.backward(
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/autograd/__init__.py", line 353, in backward
+[rank0]:     _engine_run_backward(
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/autograd/graph.py", line 824, in _engine_run_backward
+[rank0]:     return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/autograd/function.py", line 307, in apply
+[rank0]:     return user_fn(self, *args)
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/amp/autocast_mode.py", line 556, in decorate_bwd
+[rank0]:     return bwd(*args, **kwargs)
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/deepspeed/runtime/zero/linear.py", line 80, in backward
+[rank0]:     input, weight, bias = ctx.saved_tensors
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/utils/checkpoint.py", line 1128, in unpack_hook
+[rank0]:     frame.check_recomputed_tensors_match(gid)
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/utils/checkpoint.py", line 902, in check_recomputed_tensors_match
+[rank0]:     raise CheckpointError(
+[rank0]: torch.utils.checkpoint.CheckpointError: torch.utils.checkpoint: Recomputed values for the following tensors have different metadata than during the forward pass.
+[rank0]: tensor at position 4:
+[rank0]: saved metadata: {'shape': torch.Size([3584]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+[rank0]: recomputed metadata: {'shape': torch.Size([0]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+[rank0]: tensor at position 6:
+[rank0]: saved metadata: {'shape': torch.Size([3584, 3584]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+[rank0]: recomputed metadata: {'shape': torch.Size([0]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+[rank0]: tensor at position 7:
+[rank0]: saved metadata: {'shape': torch.Size([3584]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+[rank0]: recomputed metadata: {'shape': torch.Size([0]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+[rank0]: tensor at position 14:
+[rank0]: saved metadata: {'shape': torch.Size([512, 3584]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+[rank0]: recomputed metadata: {'shape': torch.Size([0]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+[rank0]: tensor at position 15:
+[rank0]: saved metadata: {'shape': torch.Size([512]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+[rank0]: recomputed metadata: {'shape': torch.Size([0]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+[rank0]: tensor at position 22:
+[rank0]: saved metadata: {'shape': torch.Size([512, 3584]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+[rank0]: recomputed metadata: {'shape': torch.Size([0]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+[rank0]: tensor at position 23:
+[rank0]: saved metadata: {'shape': torch.Size([512]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+[rank0]: recomputed metadata: {'shape': torch.Size([0]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+[rank0]: tensor at position 42:
+[rank0]: saved metadata: {'shape': torch.Size([3584, 3584]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+[rank0]: recomputed metadata: {'shape': torch.Size([0]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+[rank0]: tensor at position 52:
+[rank0]: saved metadata: {'shape': torch.Size([3584]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+[rank0]: recomputed metadata: {'shape': torch.Size([0]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+[rank0]: tensor at position 54:
+[rank0]: saved metadata: {'shape': torch.Size([18944, 3584]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+[rank0]: recomputed metadata: {'shape': torch.Size([0]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+[rank0]: tensor at position 62:
+[rank0]: saved metadata: {'shape': torch.Size([18944, 3584]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+[rank0]: recomputed metadata: {'shape': torch.Size([0]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+[rank0]: tensor at position 71:
+[rank0]: saved metadata: {'shape': torch.Size([3584, 18944]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}
+[rank0]: recomputed metadata: {'shape': torch.Size([0]), 'dtype': torch.bfloat16, 'device': device(type='cuda', index=0)}

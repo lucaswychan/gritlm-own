@@ -1,0 +1,130 @@
+{
+  "os": "Linux-6.8.0-59-generic-x86_64-with-glibc2.35",
+  "python": "CPython 3.10.12",
+  "startedAt": "2025-05-31T03:39:12.669667Z",
+  "args": [
+    "--output_dir",
+    "/data/wychanbu/re_models/Qwen2.5_7B_gritlm/",
+    "--model_name_or_path",
+    "Qwen/Qwen2.5-7B",
+    "--train_data",
+    "/data/wychanbu/test_data/",
+    "--learning_rate",
+    "2e-5",
+    "--lr_scheduler_type",
+    "constant_with_warmup",
+    "--warmup_ratio",
+    "0.06",
+    "--num_train_epochs",
+    "1",
+    "--per_device_train_batch_size",
+    "8",
+    "--gradient_accumulation_steps",
+    "2",
+    "--dataloader_drop_last",
+    "--normalized",
+    "--temperature",
+    "0.02",
+    "--train_group_size",
+    "2",
+    "--negatives_cross_device",
+    "--query_max_len",
+    "2048",
+    "--passage_max_len",
+    "2048",
+    "--mode",
+    "embedding",
+    "--logging_steps",
+    "1",
+    "--bf16",
+    "--pooling_method",
+    "mean",
+    "--use_unique_indices",
+    "--attn",
+    "bbcc",
+    "--gradient_checkpointing",
+    "--attn_implementation",
+    "sdpa",
+    "--split_emb",
+    "--save_steps",
+    "500",
+    "--lora"
+  ],
+  "program": "-m training.run",
+  "git": {
+    "remote": "https://github.com/ContextualAI/gritlm.git",
+    "commit": "df074d65ede1e901b2dd1ab7e9b118de54aee7b6"
+  },
+  "email": "chanconan@gmail.com",
+  "root": "/home/wychanbu/gritlm/gritlm",
+  "host": "songcpu8",
+  "executable": "/home/wychanbu/gritlm/.gritvenv/bin/python3",
+  "cpu_count": 96,
+  "cpu_count_logical": 192,
+  "gpu": "NVIDIA L20",
+  "gpu_count": 8,
+  "disk": {
+    "/": {
+      "total": "502392610816",
+      "used": "247758491648"
+    }
+  },
+  "memory": {
+    "total": "1081976401920"
+  },
+  "cpu": {
+    "count": 96,
+    "countLogical": 192
+  },
+  "gpu_nvidia": [
+    {
+      "name": "NVIDIA L20",
+      "memoryTotal": "48305799168",
+      "cudaCores": 11776,
+      "architecture": "Ada"
+    },
+    {
+      "name": "NVIDIA L20",
+      "memoryTotal": "48305799168",
+      "cudaCores": 11776,
+      "architecture": "Ada"
+    },
+    {
+      "name": "NVIDIA L20",
+      "memoryTotal": "48305799168",
+      "cudaCores": 11776,
+      "architecture": "Ada"
+    },
+    {
+      "name": "NVIDIA L20",
+      "memoryTotal": "48305799168",
+      "cudaCores": 11776,
+      "architecture": "Ada"
+    },
+    {
+      "name": "NVIDIA L20",
+      "memoryTotal": "48305799168",
+      "cudaCores": 11776,
+      "architecture": "Ada"
+    },
+    {
+      "name": "NVIDIA L20",
+      "memoryTotal": "48305799168",
+      "cudaCores": 11776,
+      "architecture": "Ada"
+    },
+    {
+      "name": "NVIDIA L20",
+      "memoryTotal": "48305799168",
+      "cudaCores": 11776,
+      "architecture": "Ada"
+    },
+    {
+      "name": "NVIDIA L20",
+      "memoryTotal": "48305799168",
+      "cudaCores": 11776,
+      "architecture": "Ada"
+    }
+  ],
+  "cudaVersion": "12.2"
+}

@@ -1,0 +1,71 @@
+  0%|                                                                                                                      | 0/755 [00:00<?, ?it/s]05/31/2025 12:56:13 - INFO - training.gradcache_trainer -   model dtype: torch.bfloat16
+05/31/2025 12:56:13 - INFO - training.gradcache_trainer -   inputs['query'] dtype: torch.int64
+05/31/2025 12:56:13 - INFO - training.gradcache_trainer -   inputs['passage'] dtype: torch.int64
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/home/wychanbu/gritlm/gritlm/training/run.py", line 341, in <module>
+    main()
+  File "/home/wychanbu/gritlm/gritlm/training/run.py", line 323, in main
+    trainer.train()
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/transformers/trainer.py", line 1539, in train
+    return inner_training_loop(
+  File "/home/wychanbu/gritlm/gritlm/training/gradcache_trainer.py", line 590, in _inner_training_loop
+    loss_emb_p, p_reps = self.get_loss_no_gas(
+  File "/home/wychanbu/gritlm/gritlm/training/gradcache_trainer.py", line 180, in get_loss_no_gas
+    out = model(*args, **kwargs)
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/distributed/fsdp/fully_sharded_data_parallel.py", line 856, in forward
+    output = self._fsdp_wrapped_module(*args, **kwargs)
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/accelerate/utils/operations.py", line 819, in forward
+    return model_forward(*args, **kwargs)
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/accelerate/utils/operations.py", line 807, in __call__
+    return convert_to_fp32(self.model_forward(*args, **kwargs))
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/amp/autocast_mode.py", line 44, in decorate_autocast
+    return func(*args, **kwargs)
+  File "/home/wychanbu/gritlm/gritlm/training/model.py", line 221, in forward
+    loss_emb=loss_emb.to(self.model.dtype),
+AttributeError: 'NoneType' object has no attribute 'to'
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+[rank0]:     return _run_code(code, main_globals, None,
+[rank0]:   File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+[rank0]:     exec(code, run_globals)
+[rank0]:   File "/home/wychanbu/gritlm/gritlm/training/run.py", line 341, in <module>
+[rank0]:     main()
+[rank0]:   File "/home/wychanbu/gritlm/gritlm/training/run.py", line 323, in main
+[rank0]:     trainer.train()
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/transformers/trainer.py", line 1539, in train
+[rank0]:     return inner_training_loop(
+[rank0]:   File "/home/wychanbu/gritlm/gritlm/training/gradcache_trainer.py", line 590, in _inner_training_loop
+[rank0]:     loss_emb_p, p_reps = self.get_loss_no_gas(
+[rank0]:   File "/home/wychanbu/gritlm/gritlm/training/gradcache_trainer.py", line 180, in get_loss_no_gas
+[rank0]:     out = model(*args, **kwargs)
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/distributed/fsdp/fully_sharded_data_parallel.py", line 856, in forward
+[rank0]:     output = self._fsdp_wrapped_module(*args, **kwargs)
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/accelerate/utils/operations.py", line 819, in forward
+[rank0]:     return model_forward(*args, **kwargs)
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/accelerate/utils/operations.py", line 807, in __call__
+[rank0]:     return convert_to_fp32(self.model_forward(*args, **kwargs))
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/amp/autocast_mode.py", line 44, in decorate_autocast
+[rank0]:     return func(*args, **kwargs)
+[rank0]:   File "/home/wychanbu/gritlm/gritlm/training/model.py", line 221, in forward
+[rank0]:     loss_emb=loss_emb.to(self.model.dtype),
+[rank0]: AttributeError: 'NoneType' object has no attribute 'to'

@@ -28,6 +28,8 @@ class GritLM(torch.nn.Module):
                 self.model = T5EncoderModel.from_pretrained(model_name_or_path, **kwargs)
             else:
                 self.model = AutoModel.from_pretrained(model_name_or_path, trust_remote_code=True, **kwargs)
+                self.model.config.use_cache = False
+                print(f"Model dtype: {self.model.dtype}")
             self.embedding_attr = None
         else:
             self.model = AutoModelForCausalLM.from_pretrained(model_name_or_path, trust_remote_code=True, **kwargs)

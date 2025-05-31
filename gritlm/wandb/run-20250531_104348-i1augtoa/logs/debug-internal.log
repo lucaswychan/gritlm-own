@@ -1,0 +1,7 @@
+{"time":"2025-05-31T10:43:48.049674245+08:00","level":"INFO","msg":"stream: starting","core version":"0.19.11","symlink path":"/home/wychanbu/gritlm/gritlm/wandb/run-20250531_104348-i1augtoa/logs/debug-core.log"}
+{"time":"2025-05-31T10:43:48.360374564+08:00","level":"INFO","msg":"created new stream","id":"i1augtoa"}
+{"time":"2025-05-31T10:43:48.360421413+08:00","level":"INFO","msg":"stream: started","id":"i1augtoa"}
+{"time":"2025-05-31T10:43:48.360439347+08:00","level":"INFO","msg":"writer: Do: started","stream_id":"i1augtoa"}
+{"time":"2025-05-31T10:43:48.360455457+08:00","level":"INFO","msg":"sender: started","stream_id":"i1augtoa"}
+{"time":"2025-05-31T10:43:48.360469343+08:00","level":"INFO","msg":"handler: started","stream_id":"i1augtoa"}
+{"time":"2025-05-31T10:43:48.65295699+08:00","level":"INFO","msg":"Starting system monitor"}

@@ -1,0 +1,45 @@
+  0%|                                                                                                                      | 0/755 [00:00<?, ?it/s]05/31/2025 12:58:09 - INFO - training.gradcache_trainer -   model dtype: torch.bfloat16
+05/31/2025 12:58:09 - INFO - training.gradcache_trainer -   inputs['query'] dtype: torch.int64
+05/31/2025 12:58:09 - INFO - training.gradcache_trainer -   inputs['passage'] dtype: torch.int64
+05/31/2025 12:58:33 - INFO - training.gradcache_trainer -   loss_emb_p dtype: torch.float32
+05/31/2025 12:58:33 - INFO - training.gradcache_trainer -   p_reps dtype: torch.float32
+  0%|▏                                                                                                           | 1/755 [00:24<5:06:00, 24.35s/it]05/31/2025 12:58:33 - INFO - training.gradcache_trainer -   model dtype: torch.bfloat16
+{'loss': 28.6594, 'learning_rate': 4.347826086956522e-07, 'epoch': 0.0}
+05/31/2025 12:58:33 - INFO - training.gradcache_trainer -   inputs['query'] dtype: torch.int64
+05/31/2025 12:58:33 - INFO - training.gradcache_trainer -   inputs['passage'] dtype: torch.int64
+05/31/2025 12:58:53 - INFO - training.gradcache_trainer -   loss_emb_p dtype: torch.float32
+05/31/2025 12:58:53 - INFO - training.gradcache_trainer -   p_reps dtype: torch.float32
+  0%|▎                                                                                                           | 2/755 [00:44<4:35:19, 21.94s/it]05/31/2025 12:58:53 - INFO - training.gradcache_trainer -   model dtype: torch.bfloat16
+{'loss': 28.5322, 'learning_rate': 8.695652173913044e-07, 'epoch': 0.0}
+05/31/2025 12:58:53 - INFO - training.gradcache_trainer -   inputs['query'] dtype: torch.int64
+05/31/2025 12:58:53 - INFO - training.gradcache_trainer -   inputs['passage'] dtype: torch.int64
+05/31/2025 12:59:11 - INFO - training.gradcache_trainer -   loss_emb_p dtype: torch.float32
+05/31/2025 12:59:11 - INFO - training.gradcache_trainer -   p_reps dtype: torch.float32
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/home/wychanbu/gritlm/gritlm/training/run.py", line 341, in <module>
+    main()
+  File "/home/wychanbu/gritlm/gritlm/training/run.py", line 323, in main
+    trainer.train()
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/transformers/trainer.py", line 1539, in train
+    return inner_training_loop(
+  File "/home/wychanbu/gritlm/gritlm/training/gradcache_trainer.py", line 609, in _inner_training_loop
+    assert torch.allclose(loss_emb_q, loss_emb_p), f"{loss_emb_q} != {loss_emb_p}"
+AssertionError: 30.27099609375 != 30.2587890625
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+[rank0]:     return _run_code(code, main_globals, None,
+[rank0]:   File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+[rank0]:     exec(code, run_globals)
+[rank0]:   File "/home/wychanbu/gritlm/gritlm/training/run.py", line 341, in <module>
+[rank0]:     main()
+[rank0]:   File "/home/wychanbu/gritlm/gritlm/training/run.py", line 323, in main
+[rank0]:     trainer.train()
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/transformers/trainer.py", line 1539, in train
+[rank0]:     return inner_training_loop(
+[rank0]:   File "/home/wychanbu/gritlm/gritlm/training/gradcache_trainer.py", line 609, in _inner_training_loop
+[rank0]:     assert torch.allclose(loss_emb_q, loss_emb_p), f"{loss_emb_q} != {loss_emb_p}"
+[rank0]: AssertionError: 30.27099609375 != 30.2587890625

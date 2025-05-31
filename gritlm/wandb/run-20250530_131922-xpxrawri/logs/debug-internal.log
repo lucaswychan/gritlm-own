@@ -1,0 +1,11 @@
+{"time":"2025-05-30T13:19:22.130275268+08:00","level":"INFO","msg":"stream: starting","core version":"0.19.11","symlink path":"/home/wychanbu/gritlm/gritlm/wandb/run-20250530_131922-xpxrawri/logs/debug-core.log"}
+{"time":"2025-05-30T13:19:22.434825489+08:00","level":"INFO","msg":"created new stream","id":"xpxrawri"}
+{"time":"2025-05-30T13:19:22.434903496+08:00","level":"INFO","msg":"stream: started","id":"xpxrawri"}
+{"time":"2025-05-30T13:19:22.434925658+08:00","level":"INFO","msg":"handler: started","stream_id":"xpxrawri"}
+{"time":"2025-05-30T13:19:22.434922542+08:00","level":"INFO","msg":"sender: started","stream_id":"xpxrawri"}
+{"time":"2025-05-30T13:19:22.434970753+08:00","level":"INFO","msg":"writer: Do: started","stream_id":"xpxrawri"}
+{"time":"2025-05-30T13:19:22.7490399+08:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-05-30T13:19:32.838627311+08:00","level":"INFO","msg":"stream: closing","id":"xpxrawri"}
+{"time":"2025-05-30T13:19:32.838695099+08:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-05-30T13:19:32.838815636+08:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-05-30T13:19:34.221550492+08:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}

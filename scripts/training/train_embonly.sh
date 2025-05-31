@@ -12,71 +12,56 @@
 ######################
 ### Set enviroment ###
 ######################
-cd /home/niklas/gritlm/gritlm
-source /env/bin/start-ctx-user
-conda activate gritlm
-export WANDB_PROJECT="gritlm"
+cd /home/wychanbu/gritlm/gritlm
+source /home/wychanbu/gritlm/.gritvenv/bin/activate
+# export WANDB_PROJECT="gritlm"
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+export HF_HOME=/data/wychanbu/huggingface
+export NCCL_P2P_DISABLE=1
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 # Training setup
 GPUS_PER_NODE=8
-# so processes know who to talk to
-MASTER_ADDR=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1)
-MASTER_PORT=6000
-NNODES=$SLURM_NNODES
-NODE_RANK=$SLURM_PROCID 
-WORLD_SIZE=$(($GPUS_PER_NODE*$NNODES))
-######################
-
-######################
-#### Set network #####
-######################
-head_node_ip=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1)
-######################
 
 LAUNCHER="accelerate launch \
-    --config_file /home/niklas/gritlm/scripts/configs/config_128gpusfsdp_m7.yml \
-    --num_machines $NNODES \
-    --num_processes $WORLD_SIZE \
-    --main_process_ip "$MASTER_ADDR" \
-    --main_process_port $MASTER_PORT \
-    --num_processes $WORLD_SIZE \
-    --machine_rank \$SLURM_PROCID \
-    --role $SLURMD_NODENAME: \
-    --rdzv_conf rdzv_backend=c10d \
-    --max_restarts 0 \
-    --tee 3 \
+    --config_file /home/wychanbu/gritlm/scripts/configs/config_8gpusfsdp_qwen.yml \
+    --num_machines 1 \
+    --num_processes $GPUS_PER_NODE \
+    --main_process_port 8000 \
+    --machine_rank 0 \
+    --role localhost: \
+    --tee 1 \
     "
+
+TRAIN_DATA=/data/wychanbu/test_data/ # replace with the directory of your training data
 
 export CMD=" \
     -m training.run \
-    --output_dir /data/niklas/gritlm/emb_m7_nodes16_fast_tmp \
-    --model_name_or_path mistralai/Mistral-7B-v0.1 \
-    --train_data /data/niklas/gritlm/e5ds \
+    --output_dir /data/wychanbu/re_models/Qwen2.5_7B_gritlm/ \
+    --model_name_or_path Qwen/Qwen2.5-7B \
+    --train_data $TRAIN_DATA \
     --learning_rate 2e-5 \
-    --lr_scheduler_type linear \
-    --warmup_ratio 0.03 \
-    --max_steps 1253 \
-    --per_device_train_batch_size 16 \
-    --gradient_accumulation_steps 1 \
+    --lr_scheduler_type constant_with_warmup \
+    --warmup_ratio 0.06 \
+    --num_train_epochs 1 \
+    --per_device_train_batch_size 4 \
+    --gradient_accumulation_steps 4 \
     --dataloader_drop_last \
     --normalized \
     --temperature 0.02 \
     --train_group_size 2 \
     --negatives_cross_device \
-    --query_max_len 256 \
+    --query_max_len 2048 \
     --passage_max_len 2048 \
     --mode embedding \
     --logging_steps 1 \
     --bf16 \
     --pooling_method mean \
+    --use_unique_indices \
     --attn bbcc \
+    --gradient_checkpointing \
     --attn_implementation sdpa \
-    --save_steps 5000 \
-    --gradient_checkpointing
+    --save_steps 500 
+    --lora
     "
 
-SRUN_ARGS=" \
-    --wait=6000 \
-    --kill-on-bad-exit=1 \
-    "
-
-clear; srun $SRUN_ARGS --jobid $SLURM_JOB_ID bash -c "$LAUNCHER $CMD" 2>&1
+clear; $LAUNCHER $CMD

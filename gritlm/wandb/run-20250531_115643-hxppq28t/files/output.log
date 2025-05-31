@@ -1,0 +1,54 @@
+  0%|                                                                                                                      | 0/755 [00:00<?, ?it/s]Traceback (most recent call last):
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/distributed/fsdp/fully_sharded_data_parallel.py", line 538, in __getattr__
+    return super().__getattr__(name)  # defer to nn.Module's logic
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1940, in __getattr__
+    raise AttributeError(
+AttributeError: 'FullyShardedDataParallel' object has no attribute 'dtype'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/home/wychanbu/gritlm/gritlm/training/run.py", line 341, in <module>
+    main()
+  File "/home/wychanbu/gritlm/gritlm/training/run.py", line 323, in main
+    trainer.train()
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/transformers/trainer.py", line 1539, in train
+    return inner_training_loop(
+  File "/home/wychanbu/gritlm/gritlm/training/gradcache_trainer.py", line 587, in _inner_training_loop
+    logger.info(f"model dtype: {model.dtype}")
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/distributed/fsdp/fully_sharded_data_parallel.py", line 540, in __getattr__
+    return getattr(self._fsdp_wrapped_module, name)
+  File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1940, in __getattr__
+    raise AttributeError(
+AttributeError: 'GritLMTrainModel' object has no attribute 'dtype'
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/distributed/fsdp/fully_sharded_data_parallel.py", line 538, in __getattr__
+[rank0]:     return super().__getattr__(name)  # defer to nn.Module's logic
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1940, in __getattr__
+[rank0]:     raise AttributeError(
+[rank0]: AttributeError: 'FullyShardedDataParallel' object has no attribute 'dtype'
+
+[rank0]: During handling of the above exception, another exception occurred:
+
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+[rank0]:     return _run_code(code, main_globals, None,
+[rank0]:   File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+[rank0]:     exec(code, run_globals)
+[rank0]:   File "/home/wychanbu/gritlm/gritlm/training/run.py", line 341, in <module>
+[rank0]:     main()
+[rank0]:   File "/home/wychanbu/gritlm/gritlm/training/run.py", line 323, in main
+[rank0]:     trainer.train()
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/transformers/trainer.py", line 1539, in train
+[rank0]:     return inner_training_loop(
+[rank0]:   File "/home/wychanbu/gritlm/gritlm/training/gradcache_trainer.py", line 587, in _inner_training_loop
+[rank0]:     logger.info(f"model dtype: {model.dtype}")
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/distributed/fsdp/fully_sharded_data_parallel.py", line 540, in __getattr__
+[rank0]:     return getattr(self._fsdp_wrapped_module, name)
+[rank0]:   File "/home/wychanbu/gritlm/.gritvenv/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1940, in __getattr__
+[rank0]:     raise AttributeError(
+[rank0]: AttributeError: 'GritLMTrainModel' object has no attribute 'dtype'. Did you mean: 'type'?

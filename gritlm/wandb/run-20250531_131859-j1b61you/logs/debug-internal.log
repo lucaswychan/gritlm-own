@@ -1,0 +1,7 @@
+{"time":"2025-05-31T13:18:59.886204161+08:00","level":"INFO","msg":"stream: starting","core version":"0.19.11","symlink path":"/home/wychanbu/gritlm/gritlm/wandb/run-20250531_131859-j1b61you/logs/debug-core.log"}
+{"time":"2025-05-31T13:19:00.19896946+08:00","level":"INFO","msg":"created new stream","id":"j1b61you"}
+{"time":"2025-05-31T13:19:00.199029143+08:00","level":"INFO","msg":"stream: started","id":"j1b61you"}
+{"time":"2025-05-31T13:19:00.199041396+08:00","level":"INFO","msg":"handler: started","stream_id":"j1b61you"}
+{"time":"2025-05-31T13:19:00.19905406+08:00","level":"INFO","msg":"sender: started","stream_id":"j1b61you"}
+{"time":"2025-05-31T13:19:00.19907028+08:00","level":"INFO","msg":"writer: Do: started","stream_id":"j1b61you"}
+{"time":"2025-05-31T13:19:00.565526976+08:00","level":"INFO","msg":"Starting system monitor"}

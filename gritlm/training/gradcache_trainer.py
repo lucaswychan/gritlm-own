@@ -153,29 +153,29 @@ class GradCacheTrainer(Trainer):
 
         # Place checkpoint in final location after all saving is finished.
         # First wait for everyone to finish writing
-        logger.info(f"Waiting for everyone to finish writing")
         self.args.distributed_state.wait_for_everyone()
-        logger.info(f"Everyone finished writing")
-        # Then go through the rewriting process starting on process 0
-        if staging_output_dir != output_dir:
-            with self.args.main_process_first(
-                desc="Renaming model checkpoint folder to true location", local=self.args.save_on_each_node
-            ):
-                logger.info(f"Renaming model checkpoint folder to true location")
-                if os.path.exists(staging_output_dir):
-                    if torch.distributed.is_initialized():
-                        if torch.distributed.get_rank() == 0:
-                            os.rename(staging_output_dir, output_dir)
-                        torch.distributed.barrier()
-                    else:
-                        os.rename(staging_output_dir, output_dir)
-        
-        logger.info(f"Saving model")
 
-        # Maybe delete some older checkpoints.
-        if self.args.should_save:
-            logger.info(f"Rotating checkpoints")
-            self._rotate_checkpoints(use_mtime=True, output_dir=run_dir)
+        logger.info("Checking if we need to rename model checkpoint folder to true location")
+        # Then go through the rewriting process, only renaming and rotating from main process(es)
+        if self.is_local_process_zero() if self.args.save_on_each_node else self.is_world_process_zero():
+            logger.info("Renaming model checkpoint folder to true location")
+            if staging_output_dir != output_dir:
+                if os.path.exists(staging_output_dir):
+                    os.rename(staging_output_dir, output_dir)
+
+                    # Ensure rename completed in cases where os.rename is not atomic
+                    # And can only happen on non-windows based systems
+                    if os.name != "nt":
+                        fd = os.open(output_dir, os.O_RDONLY)
+                        os.fsync(fd)
+                        os.close(fd)
+
+            # Maybe delete some older checkpoints.
+            if self.args.should_save:
+                logger.info("Rotating checkpoints")
+                self._rotate_checkpoints(use_mtime=True, output_dir=run_dir)
+
+        self.args.distributed_state.wait_for_everyone()
 
     def get_loss_no_gas(self, *args, **kwargs):
         model = kwargs.pop("model")

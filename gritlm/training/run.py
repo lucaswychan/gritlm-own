@@ -43,10 +43,16 @@ def filter_too_long_instructions(tokenizer, dataset, query_max_len, passage_max_
         if len(tokenizer.tokenize(BASE_BOS + USER_BOS + example["query"][0].strip("\t\n :") + USER_EOS + EMBED_BOS)) >= query_max_len:
             return False
         for ex in example["pos"] + example["neg"]:
-            if (len(ex[0]) > passage_max_len * 10) or not(ex[1]):
-                return False
-            if len(tokenizer.tokenize(BASE_BOS + USER_BOS + ex[0].strip("\t\n :") + USER_EOS + EMBED_BOS)) >= passage_max_len:
-                return False
+            if isinstance(ex, (tuple, list)):
+                if (len(ex[0]) > passage_max_len * 10) or not ex[1].strip():
+                    return False
+                if len(tokenizer.tokenize(BASE_BOS + USER_BOS + ex[0].strip("\t\n :") + USER_EOS + EMBED_BOS)) >= passage_max_len:
+                    return False
+            else:
+                if (len(ex) > passage_max_len * 10) or not ex.strip():
+                    return False
+                if len(tokenizer.tokenize(BASE_BOS + USER_BOS + ex.strip("\t\n :") + USER_EOS + EMBED_BOS)) >= passage_max_len:
+                    return False
         return True
     num_proc = max(multiprocessing.cpu_count()-2, 1) if len(dataset) > 5000 else 1
     return dataset.filter(filter_fn, num_proc=num_proc, load_from_cache_file=True)
@@ -320,7 +326,8 @@ def main():
 
     # Training
     logger.info("Starting training")
-    trainer.train(resume_from_checkpoint="/data/wychanbu/re_models/Qwen2.5_7B_gritlm/checkpoint-500")
+    resume_from_checkpoint = None
+    trainer.train(resume_from_checkpoint=resume_from_checkpoint)
     
     # The below does not save if state dict type is `SHARDED_STATE_DICT`
     trainer.save_model()

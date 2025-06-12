@@ -15,7 +15,7 @@
 cd /home/wychanbu/gritlm/gritlm
 source /home/wychanbu/gritlm/.gritvenv/bin/activate
 # export WANDB_PROJECT="gritlm"
-export CUDA_VISIBLE_DEVICES=1,2,3,4
+export CUDA_VISIBLE_DEVICES=0,1,2,3
 export HF_HOME=/data/wychanbu/huggingface
 export NCCL_P2P_DISABLE=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
@@ -32,7 +32,7 @@ LAUNCHER="accelerate launch \
     --tee 1 \
     "
 
-TRAIN_DATA=/data/wychanbu/re_data/hard-neg/ # replace with the directory of your training data
+TRAIN_DATA=/data/wychanbu/re_data/hard-neg # replace with the directory of your training data
 
 export CMD=" \
     -m training.run \

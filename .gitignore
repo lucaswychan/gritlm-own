@@ -24,3 +24,7 @@ wandb/
 *.wandb
 .gritvenv/
 .gritvenv_old/
+gritlm.egg-info/
+gritlm/wandb/
+gritlm/training/__pycache__/
+gritlm/training/GradCache/src/grad_cache/__pycache__/

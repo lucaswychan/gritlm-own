@@ -6,7 +6,8 @@ import logging
 
 import torch
 from torch import nn, Tensor
-from torch.cuda.amp import GradScaler, autocast
+from torch.cuda.amp import GradScaler
+from torch.amp import autocast
 
 from grad_cache.context_managers import RandContext
 
@@ -83,12 +84,8 @@ class GradCache:
 
         if isinstance(model_input, (dict, UserDict)) and all(isinstance(x, Tensor) for x in model_input.values()):
             keys = list(model_input.keys())
-            #@lucaswychan: if the tensor is smaller than chunk_size, we don't split it
-            chunked_tensors = [model_input[k].split(chunk_size, dim=0) for k in keys if model_input[k].shape[0] > chunk_size]
+            chunked_tensors = [model_input[k].split(chunk_size, dim=0) for k in keys]
 
-            logger.info(f"keys in split_inputs: {keys}")
-            logger.info(f"chunked_tensors in split_inputs: {[len(t) for t in chunked_tensors]}")
-            
             return [dict(zip(kk, tt)) for kk, tt in zip(repeat(keys), zip(*chunked_tensors))]
 
         elif isinstance(model_input, list) and all(isinstance(x, Tensor) for x in model_input):
@@ -269,9 +266,6 @@ class GradCache:
                 'proper initializations. Type: ' + str(type(self.models[0]))
 
         model_inputs = [self.split_inputs(x, chunk_size) for x, chunk_size in zip(model_inputs, self.chunk_sizes)]
-        logger.info(f"model_inputs in cache_step: {len(model_inputs)}")
-        for x in model_inputs:
-            logger.info(f"x in cache_step: {type(x)} {len(x)}")
 
         for model, x in zip(self.models, model_inputs):
             model_reps, rnd_states = self.forward_no_grad(model, x)

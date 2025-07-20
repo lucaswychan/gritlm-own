@@ -325,7 +325,7 @@ def main():
         # Set custom sampler, see https://github.com/huggingface/transformers/blob/ccb92be23def445f2afdea94c31286f84b89eb5b/src/transformers/trainer.py#L785
         total_bs = training_args.per_device_train_batch_size * training_args.gradient_accumulation_steps
         total_bs = total_bs * dist.get_world_size() if dist.is_initialized() else total_bs
-        trainer._get_train_sampler = lambda: CustomRandomSampler(
+        trainer._get_train_sampler = lambda _: CustomRandomSampler(
             total_batch_size=total_bs, ds_lens=ds_embedding_lens,
             _num_samples=sum(ds_embedding_lens), data_source=train_dataset,
         )
@@ -351,6 +351,15 @@ def main():
     if trainer.is_world_process_zero(): 
         tokenizer.save_pretrained(training_args.output_dir)
         config.to_json_file(training_args.output_dir + "/config.json")
+        
+        # Save the train configuration for reproducibility
+        all_configs = {}
+        all_configs["training_args"] = training_args.__dict__
+        all_configs["model_args"] = model_args.__dict__
+        all_configs["data_args"] = data_args.__dict__
+        with open(training_args.output_dir + "/train_all_configs.json", "w") as f:
+            json.dump(all_configs, f)
+
 
 if __name__ == "__main__":
     main()

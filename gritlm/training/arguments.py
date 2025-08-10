@@ -155,3 +155,5 @@ class CustomTrainingArguments(TrainingArguments):
     
     debiased: bool = field(default=False, metadata={"help": "Use debiased contrastive loss"})
     tau_plus: float = field(default=0.1, metadata={"help": "tau+ for debiased contrastive loss"})
+    
+    use_muon: bool = field(default=False, metadata={"help": "Use muon optimizer"})

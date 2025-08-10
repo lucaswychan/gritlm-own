@@ -731,8 +731,8 @@ class GradCacheTrainer(Trainer):
                                 # Do backprop on passages first as they are more expensive
                                 # & we can reuse them this way
                                 # logger.info(f"model dtype: {model.model.dtype}")
-                                logger.info(f"query shape in split_emb: {inputs['query']['input_ids'].shape}")
-                                logger.info(f"passage shape in split_emb: {inputs['passage']['input_ids'].shape}")
+                                # logger.info(f"query shape in split_emb: {inputs['query']['input_ids'].shape}")
+                                # logger.info(f"passage shape in split_emb: {inputs['passage']['input_ids'].shape}")
                                 loss_emb_p, p_reps = self.get_loss_no_gas(
                                     model=model,
                                     query=inputs["query"], 
@@ -923,7 +923,7 @@ class GradCacheTrainer(Trainer):
                         self.control = self.callback_handler.on_optimizer_step(args, self.state, self.control)
 
                         # get learning rate before update
-                        learning_rate = self.get_learning_rates()
+                        learning_rate = self._get_learning_rate()
 
                         if not self.accelerator.optimizer_step_was_skipped:
                             # Delay optimizer scheduling until metrics are generated

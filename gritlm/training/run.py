@@ -221,7 +221,7 @@ def main():
         projection=model_args.projection,
         attn=model_args.attn,
         attn_implementation=model_args.attn_implementation,
-        torch_dtype=torch.float32,
+        torch_dtype=args_to_dtype(training_args),
         loss_gen_type=training_args.loss_gen_type,
         loss_gen_factor=training_args.loss_gen_factor,
         use_cache=False,
@@ -352,14 +352,23 @@ def main():
         tokenizer.save_pretrained(training_args.output_dir)
         config.to_json_file(training_args.output_dir + "/config.json")
         
-        # Save the train configuration for reproducibility
-        all_configs = {}
-        all_configs["training_args"] = training_args.__dict__
-        all_configs["model_args"] = model_args.__dict__
-        all_configs["data_args"] = data_args.__dict__
-        with open(training_args.output_dir + "/train_all_configs.json", "w") as f:
-            json.dump(all_configs, f)
+        # # Save the train configuration for reproducibility
+        # all_configs = {}
+        # all_configs["training_args"] = training_args.__dict__
+        # all_configs["model_args"] = model_args.__dict__
+        # all_configs["data_args"] = data_args.__dict__
+        # with open(training_args.output_dir + "/train_all_configs.json", "w") as f:
+        #     json.dump(all_configs, f)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        logger.error(e)
+        if torch.distributed.is_initialized():
+            torch.distributed.destroy_process_group()
+        raise e
+    finally:
+        if torch.distributed.is_initialized():
+            torch.distributed.destroy_process_group()

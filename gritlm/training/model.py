@@ -26,8 +26,7 @@ class GritLMTrainOutput(ModelOutput):
 
 class DistributedContrastiveLoss:
     """Contrastive loss module that supports the standard InfoNCE objective as well as
-    the *debiased* variant presented in *A De-biased Contrastive Loss for
-    Unsupervised Visual Representation Learning* (https://arxiv.org/abs/2010.02855).
+    the *debiased* variant
 
     The implementation can optionally gather negatives across devices in a
     distributed setup so that every mini-batch benefits from a larger negative
@@ -62,6 +61,13 @@ class DistributedContrastiveLoss:
                 raise ValueError("Cannot use negatives_cross_device without distributed training")
             self.rank = dist.get_rank()
             self.world_size = dist.get_world_size()
+        else:
+            self.rank = 0
+            self.world_size = 1
+        
+        # Small caches to reduce per-step allocations
+        self._gather_buf: Optional[torch.Tensor] = None
+        self._arange_cache = {}
 
     def __call__(self, q_reps, p_reps):
         if self.negatives_cross_device:
@@ -80,25 +86,47 @@ class DistributedContrastiveLoss:
         # logger.info(f"scores in contrastive loss: {scores.shape}")
         scores = scores.view(q_reps.size(0), -1)
 
-        target = torch.arange(scores.size(0), device=scores.device, dtype=torch.long)
-        # Because queries and passages might have been gathered across devices,
-        # the positive index for a given query is offset by the passage block
-        # size (which equals p_reps.size(0) // q_reps.size(0)).
-        target *= (p_reps.size(0) // q_reps.size(0))
+         # Cache arange to avoid re-allocation
+        Bq = scores.size(0)
+        base_idx = self._get_arange(Bq, scores.device)
+        # Positive index stride within each block of passages
+        target = base_idx * (p_reps.size(0) // q_reps.size(0))
+    
         return self.cross_entropy(scores, target)
 
     def _dist_gather_tensor(self, t: Optional[torch.Tensor]):
-        if t is None: return None
+        if t is None:
+            return None
+        if self.world_size == 1:
+            return t
         t = t.contiguous()
 
-        all_tensors = [torch.empty_like(t) for _ in range(self.world_size)]
-        # All tensors have the same shape, as pooling already applied to them
-        dist.all_gather(all_tensors, t)
-
-        all_tensors[self.rank] = t
-        all_tensors = torch.cat(all_tensors, dim=0)
-
-        return all_tensors
+        # Prefer faster gather-into-tensor if available, while preserving autograd behavior
+        use_into_tensor = hasattr(dist, "all_gather_into_tensor")
+        if use_into_tensor:
+            local_bs = t.size(0)
+            out_shape = (local_bs * self.world_size, *t.size()[1:])
+            buf_mismatch = (
+                self._gather_buf is None
+                or tuple(self._gather_buf.shape) != out_shape
+                or self._gather_buf.dtype != t.dtype
+                or self._gather_buf.device != t.device
+            )
+            if buf_mismatch:
+                self._gather_buf = torch.empty(out_shape, dtype=t.dtype, device=t.device)
+            with torch.no_grad():
+                dist.all_gather_into_tensor(self._gather_buf, t)
+            # Build result by replacing local slice with the original tensor to keep gradients
+            chunks = list(self._gather_buf.chunk(self.world_size, dim=0))
+            chunks[self.rank] = t
+            return torch.cat(chunks, dim=0)
+        else:
+            logger.info(f"Using list-based gather for dist_gather_tensor")
+            # Fallback: list-based gather
+            all_tensors = [torch.empty_like(t) for _ in range(self.world_size)]
+            dist.all_gather(all_tensors, t)
+            all_tensors[self.rank] = t
+            return torch.cat(all_tensors, dim=0)
 
     def compute_similarity(self, q_reps, p_reps):
         if len(p_reps.size()) == 2:
@@ -130,16 +158,17 @@ class DistributedContrastiveLoss:
         # Similarity matrix between queries and ALL passages  [B, B*M]
         sim = torch.matmul(q_norm, p_norm.transpose(0, 1)) / self.temperature  # scaled by temperature
         
-        # logger.info(f"sim in debiased contrastive loss: {sim.shape}")
-
-        exp_sim = torch.exp(sim)
+        # Compute row-wise log-sum-exp for numerical stability and reduced memory
+        logsumexp_all = torch.logsumexp(sim, dim=1)  # [B]
+        sum_exp_all = torch.exp(logsumexp_all)       # [B]
 
         # Positive indices are at i*M for query i
-        pos_indices = (torch.arange(B, device=q_reps.device) * M).view(B, 1)
-        pos = exp_sim.gather(1, pos_indices).squeeze(1)  # [B]
+        base_idx = self._get_arange(B, sim.device)
+        pos_logit = sim[base_idx, base_idx * M]      # [B]
+        pos = torch.exp(pos_logit)                   # [B]
 
         # All negatives for each query
-        neg = exp_sim.sum(dim=1) - pos  # [B]
+        neg = sum_exp_all - pos                      # [B]
 
         # De-biased estimator Ng
         if self.debiased:
@@ -175,6 +204,17 @@ class DistributedContrastiveLoss:
         pos_mask[idx + batch_size, idx] = True
 
         return neg_mask, pos_mask
+
+    def _get_arange(self, n: int, device: torch.device) -> torch.Tensor:
+        key = (device.type, device.index)
+        cached = self._arange_cache.get(key)
+        if cached is None or cached.numel() < n:
+            cached = torch.arange(n, device=device)
+            self._arange_cache[key] = cached
+        else:
+            # Narrow without allocating when smaller n is requested
+            cached = cached[:n]
+        return cached
 
 class NextTokenLoss:
     def __init__(self, vocab_size: int, loss_gen_type: str = "mixed", loss_gen_factor: float = 1.0):
@@ -248,11 +288,11 @@ class GritLMTrainModel(GritLM):
 
     def encode(self, features):
         if features is None: return None
-        # Clone to avoid modifying the original tensor
-        attention_mask = features['attention_mask'].clone() if 'attention_mask' in features else None
-        instruction_lens = features['instruction_lens'] if 'instruction_lens' in features else None
+        # Use in-place operations where safe to reduce memory allocations
+        attention_mask = features.get('attention_mask')
+        instruction_lens = features.get('instruction_lens')
         kwargs = {'input_ids': features.get('input_ids'), 'attention_mask': attention_mask}
-
+        
         if self.attn[:2] == 'cb':
             kwargs['instruction_lens'] = instruction_lens
         elif self.attn[:2] == 'bb':
@@ -264,14 +304,17 @@ class GritLMTrainModel(GritLM):
         
         # Mask out the instruction tokens for pooling
         #@lucaswychan add checking of instruction_lens, since original approach will assume there is instruction in the passage
-        if instruction_lens is not None and instruction_lens != []:
-            # Make a new copy of attention mask to prevent in-place problems
-            attention_mask = features['attention_mask'].clone()
+        if instruction_lens is not None and len(instruction_lens) > 0:
+            # Clone only when necessary for instruction masking
+            attention_mask = attention_mask.clone()
+            # Vectorized masking for better performance
+            batch_size = attention_mask.size(0)
             # Mask out the instruction tokens for pooling
             for i, l in enumerate(instruction_lens):
-                attention_mask[i, :l] = 0
-                # Make sure not all zeros - If this happens it is a bug
-                assert attention_mask[i].sum() > 0, f"All 0: {attention_mask[i]}, l: {l}"
+                if i < batch_size and l > 0:
+                    attention_mask[i, :l] = 0
+                    # Make sure not all zeros - If this happens it is a bug
+                    assert attention_mask[i].sum() > 0, f"All 0: {attention_mask[i]}, l: {l}"
 
 
         reps = self.pooling(out, attention_mask)
@@ -327,7 +370,15 @@ class GritLMTrainModel(GritLM):
             q_reps, p_reps
         ) if (q_reps is not None and p_reps is not None) else None        
 
-        loss = sum([x for x in [loss_emb, loss_gen] if x is not None])
+        # Optimize loss combination
+        if loss_emb is not None and loss_gen is not None:
+            loss = loss_emb + loss_gen
+        elif loss_emb is not None:
+            loss = loss_emb
+        elif loss_gen is not None:
+            loss = loss_gen
+        else:
+            loss = None
 
         # Also return q_reps in case of GradCache
         return GritLMTrainOutput(

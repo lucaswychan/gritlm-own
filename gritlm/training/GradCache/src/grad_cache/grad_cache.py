@@ -260,10 +260,10 @@ class GradCache:
         all_reps = []
         all_rnd_states = []
 
-        if no_sync_except_last:
-            assert all(map(lambda m: isinstance(m, (torch.distributed.fsdp.FullyShardedDataParallel, nn.parallel.DistributedDataParallel)), self.models)), \
-                'Some of models are not wrapped in DistributedDataParallel. Make sure you are running DDP with ' \
-                'proper initializations. Type: ' + str(type(self.models[0]))
+        # if no_sync_except_last:
+        #     assert all(map(lambda m: isinstance(m, (torch.distributed.fsdp.FullyShardedDataParallel, nn.parallel.DistributedDataParallel)), self.models)), \
+        #         'Some of models are not wrapped in DistributedDataParallel. Make sure you are running DDP with ' \
+        #         'proper initializations. Type: ' + str(type(self.models[0]))
 
         model_inputs = [self.split_inputs(x, chunk_size) for x, chunk_size in zip(model_inputs, self.chunk_sizes)]
 

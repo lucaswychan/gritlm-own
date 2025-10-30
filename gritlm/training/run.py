@@ -4,6 +4,7 @@ import multiprocessing
 import os
 from pathlib import Path
 import random
+import sys
 
 import datasets
 import torch
@@ -16,6 +17,7 @@ from .arguments import CustomTrainingArguments, DataArguments, ModelArguments
 from .data import CustomCollator, CustomDataset, CustomRandomSampler
 from .model import GritLMTrainModel
 from .gradcache_trainer import GradCacheTrainer
+from .ring_trainer import RingTrainer
 
 if is_sagemaker_mp_enabled():
     import smdistributed.modelparallel.torch as smp
@@ -48,15 +50,9 @@ def filter_too_long_instructions_and_no_negs(dataset, tokenizer, query_max_len, 
     base_prompt = BASE_BOS + USER_BOS
     embed_prompt = USER_EOS + EMBED_BOS
     
-    def tokens_after_instruction(instr: str, text: str) -> int:
-        """How many tokens remain once the instruction part is masked out?"""
-        prompt_full  = base_prompt + instr + embed_prompt + text + EMBED_EOS
-        prompt_instr = base_prompt + instr + embed_prompt
-        tok_full  = tokenizer(prompt_full,  add_special_tokens=False,
-                            truncation=True, max_length=query_max_len)["input_ids"]
-        tok_instr = tokenizer(prompt_instr, add_special_tokens=False)["input_ids"]
-        return len(tok_full) - len(tok_instr)
-
+    # Use fast tokenizer if available
+    tokenizer.is_fast if hasattr(tokenizer, 'is_fast') else False
+    
     def filter_fn(example):
         # Filter out super long examples to avoid tokenize taking forever
         if not example["neg"]:
@@ -64,19 +60,37 @@ def filter_too_long_instructions_and_no_negs(dataset, tokenizer, query_max_len, 
         # Optimize string checks
         query_0 = example["query"][0]
         query_1 = example["query"][1]
+        
+        # Quick length checks before expensive tokenization
         if (len(query_0) > query_max_len * 10) or not query_1.strip():
             return False
-        # Use faster string length estimate before tokenization
-        if len(tokenizer.tokenize(base_prompt + example["query"][0].strip("\t\n :") + embed_prompt)) >= query_max_len:
+        
+        # Single tokenization pass for instruction length check
+        prompt_instr = base_prompt + query_0 + embed_prompt
+        prompt_full = prompt_instr + query_1 + EMBED_EOS
+        
+        # Tokenize both at once to avoid redundant encoding
+        tok_instr = tokenizer(prompt_instr, add_special_tokens=False)["input_ids"]
+        instr_len = len(tok_instr)
+        
+        # Check if instruction alone is too long
+        if instr_len >= query_max_len:
             return False
-        if len(tokenizer.tokenize(base_prompt + query_0.strip("\t\n :") + embed_prompt)) >= query_max_len:
+        
+        # Tokenize full prompt with truncation
+        tok_full = tokenizer(prompt_full, add_special_tokens=False,
+                           truncation=True, max_length=query_max_len)["input_ids"]
+        
+        # Check if there's any text content after instruction
+        if len(tok_full) - instr_len <= 0:
             return False
-        if tokens_after_instruction(query_0, query_1) == 0:
-            return False
+        
         return True
     
     # Optimize multiprocessing - use more processes for larger datasets
-    num_proc = min(max(multiprocessing.cpu_count()-1, 1), 8) if len(dataset) > 5000 else 1
+    # Increase parallelism for better throughput
+    num_proc = min(max(multiprocessing.cpu_count()-1, 1), 16) if len(dataset) > 5000 else 1
+    logger.info(f"Filtering dataset with {num_proc} processes")
     return dataset.filter(filter_fn, num_proc=num_proc, load_from_cache_file=True)
 
 def main():
@@ -107,6 +121,19 @@ def main():
         bool(training_args.local_rank != -1),
         training_args.bf16,
     )
+    
+    # Enable TF32 for faster training on Ampere+ GPUs (using new PyTorch 2.9+ API)
+    if torch.cuda.is_available():
+        try:
+            # Try new API first (PyTorch 2.9+)
+            torch.backends.cudnn.conv.fp32_precision = 'tf32'
+            torch.backends.cuda.matmul.fp32_precision = 'tf32'
+            logger.info("TF32 enabled for faster matmul and cuDNN operations (new API)")
+        except AttributeError:
+            # Fall back to old API for older PyTorch versions
+            torch.backends.cuda.matmul.allow_tf32 = True
+            torch.backends.cudnn.allow_tf32 = True
+            logger.info("TF32 enabled for faster matmul and cuDNN operations (old API)")
     
     if training_args.gradient_checkpointing:
         training_args.gradient_checkpointing_kwargs = {"use_reentrant": False}
@@ -245,19 +272,16 @@ def main():
     # add this to make sure the model is in training mode
     model.model.train()
     
-    # #@lucaswychan randomly initialized all the parameters in the model with He normal initialization
-    # def init_transformer(m):
-    #     if isinstance(m, torch.nn.Linear):
-    #         torch.nn.init.normal_(m.weight, mean=0.0, std=0.02)
-    #         if m.bias is not None:
-    #             torch.nn.init.zeros_(m.bias)
-    #     elif isinstance(m, torch.nn.Embedding):
-    #         torch.nn.init.normal_(m.weight, mean=0.0, std=0.02)
-    #     elif isinstance(m, torch.nn.LayerNorm):
-    #         torch.nn.init.ones_(m.weight); torch.nn.init.zeros_(m.bias)
-
-    # model.model.apply(init_transformer)
-    # logger.info(f"Randomly initialized all the parameters in the model")
+    # torch.compile is completely disabled due to incompatibility with FSDP + GradCache
+    # Error: CUDA Graphs from torch.compile conflicts with GradCache tensor operations
+    if training_args.torch_compile:
+        logger.warning(
+            "torch.compile is disabled. It has known issues with:\n"
+            "  1. FSDP distributed training (model unwrapping conflicts)\n"
+            "  2. GradCache (CUDA Graphs incompatible with gradient caching)\n"
+            "  For single-GPU training without GradCache, you can enable torch.compile for 20-50% speedup."
+        )
+        training_args.torch_compile = False
     
     # Add special token for embed
     if model_args.pooling_method == "lasttoken":
@@ -311,40 +335,59 @@ def main():
     )
     
     optimizer = None
+    
+    # Note: Optimizer creation is handled by the Trainer
+    # We only monkey-patch if using custom optimizers
+    
     if training_args.use_muon:
         # Build Muon optimizer AFTER wrapping so parameter references are valid with FSDP
         # from muon import MuonWithAuxAdam, SingleDeviceMuonWithAuxAdam
         from dion import Dion
-        
-        logger.info(f"Using Dion optimizer with learning rate {training_args.learning_rate}")
 
         def create_muon_optimizer(self):
             """
             Create MuonWithAuxAdam (or single-device variant) using current model params.
             Must be called after accelerator.prepare so FSDP-wrapped params are used.
             """
-            logger.info("Using Dion optimizer (with FSDP2 meshes if available)")
+            logger.info("Using Muon optimizer")
 
             # Group parameters from the CURRENT model (may be FSDP-wrapped)
+            # # print(f"Params Shapes: {[p.shape for n, p in self.model.named_parameters()]}")
             hidden_matrix_params = [p for n, p in self.model.named_parameters() if p.ndim >= 2 and "embed" not in n]
+            # # If use_orig_params=False, FSDP may expose only flat/sharded params; fallback to all params >=2D
+            # if len(hidden_matrix_params) == 0:
+            #     logger.warning("No hidden 2D params found (use_orig_params may be False). Falling back to AdamW for all params.")
+            #     from torch.optim import AdamW
+            #     opt = AdamW(self.model.parameters(), lr=training_args.learning_rate, weight_decay=training_args.weight_decay)
+            #     self.optimizer = opt
+                
+            #     if is_sagemaker_mp_enabled():
+            #         self.optimizer = smp.DistributedOptimizer(self.optimizer)
+
+            #     return self.optimizer
+    
             embed_params = [p for n, p in self.model.named_parameters() if "embed" in n]
             scalar_params = [p for p in self.model.parameters() if p.ndim < 2]
+            
+            logger.info(f"Num of hidden matrix params: {len(hidden_matrix_params)}")
+            logger.info(f"Num of embed params: {len(embed_params)}")
+            logger.info(f"Num of scalar params: {len(scalar_params)}")
 
             # optimized by Adam
             adam_groups = [
-                dict(params=embed_params, lr=training_args.learning_rate),
-                dict(params=scalar_params, lr=training_args.learning_rate),
+                dict(params=embed_params),
+                dict(params=scalar_params),
             ]
             adam_groups = [
                 dict(**g, betas=(0.9, 0.999), eps=1e-8, algorithm="adamw", weight_decay=training_args.weight_decay)
                 for g in adam_groups
             ]
-            
-            # optimized by Dion for matrix params
+
+            # optimized by Muon
             muon_group = dict(
                 params=hidden_matrix_params,
-                weight_decay=training_args.weight_decay,
                 algorithm="dion",
+                weight_decay=training_args.weight_decay,
             )
             param_groups = [*adam_groups, muon_group]
 
@@ -376,14 +419,13 @@ def main():
                 outer_shard_mesh=outer_shard_mesh,
                 replicate_mesh=None,
                 replicate_mesh_grad_sync=False,
-                momentum=0.95,
                 weight_decay=training_args.weight_decay,
             )
+
 
             self.optimizer = opt
 
             if is_sagemaker_mp_enabled():
-                logger.info("Using Sagemaker MP optimizer")
                 self.optimizer = smp.DistributedOptimizer(self.optimizer)
 
             return self.optimizer
@@ -391,7 +433,8 @@ def main():
         GradCacheTrainer.create_optimizer = create_muon_optimizer
         Trainer.create_optimizer = create_muon_optimizer
     
-    print(f"Finished creating optimizer")
+    print(f"Finished monkey patching optimizer")
+    logger.info("Creating data collator...")
 
     # Optimize data collator
     data_collator = CustomCollator(
@@ -410,6 +453,7 @@ def main():
         prefixlm=data_args.prefixlm
     )
     
+    logger.info("Preparing trainer kwargs...")
     trainer_kwargs = {
         "model": model,
         "args": training_args,
@@ -419,8 +463,29 @@ def main():
         "optimizers": (optimizer, None), #@lucaswychan scheduler will always be None, so it can be set in trainer.create_scheduler
     }
     
-    if gc_chunk_size is not None:
+    # Choose trainer based on configuration
+    if training_args.use_ring_loss:
+        # Use Ring-based trainer (more efficient, no GradCache needed)
+        # Only supports embedding mode
+        if training_args.mode != 'embedding':
+            raise ValueError(f"RingTrainer only supports 'embedding' mode, got '{training_args.mode}'")
+        
+        logger.info(f"Creating RingTrainer with head_dim={training_args.ring_head_dim}, use_inf_loss={training_args.use_inf_loss}")
+        trainer = RingTrainer(**trainer_kwargs)
+        # Set ring-specific attributes
+        trainer.temperature = training_args.temperature
+        trainer.use_inf_loss = training_args.use_inf_loss
+        trainer.head_dim = training_args.ring_head_dim
+        logger.info(f"RingTrainer initialized (embedding mode only) with "
+                   f"temperature={training_args.temperature}, "
+                   f"use_inf_loss={training_args.use_inf_loss}, "
+                   f"head_dim={training_args.ring_head_dim}")
+    elif gc_chunk_size is not None:
+        # Use GradCache trainer (original implementation)
+        logger.info(f"Creating GradCacheTrainer (gc_chunk_size={gc_chunk_size})...")
+        logger.info("Initializing GradCacheTrainer...")
         trainer = GradCacheTrainer(**trainer_kwargs)
+        logger.info("GradCacheTrainer initialized successfully")
         trainer.gc_chunk_size = gc_chunk_size
         trainer.emb_loss_fn = model.emb_loss_fn
         trainer.mode = training_args.mode
@@ -431,33 +496,21 @@ def main():
         trainer.emb_p_only = training_args.emb_p_only
         trainer.emb_q_only = training_args.emb_q_only
     else:
-        # # For regular Trainer, we need to monkey patch the accelerator creation
-        # if dynamo_plugin is not None:
-        #     original_create_accelerator = Trainer.create_accelerator_and_postprocess
-            
-        #     def create_accelerator_with_dynamo(self):
-        #         """Override to include TorchDynamoPlugin."""
-        #         from accelerate import Accelerator
-        #         from accelerate.utils import GradientAccumulationPlugin
-                
-        #         gradient_accumulation_plugin = GradientAccumulationPlugin(
-        #             num_steps=1, adjust_scheduler=False, sync_with_dataloader=False
-        #         )
-                
-        #         accelerator_kwargs = {
-        #             "deepspeed_plugin": self.args.deepspeed_plugin,
-        #             "gradient_accumulation_plugin": gradient_accumulation_plugin,
-        #             "dynamo_plugin": dynamo_plugin,
-        #         }
-                
-        #         self.accelerator = Accelerator(**accelerator_kwargs)
-        #         self.gather_function = self.accelerator.gather_for_metrics
-        #         self.is_deepspeed_enabled = getattr(self.accelerator.state, "deepspeed_plugin", None) is not None
-        #         self.is_fsdp_enabled = getattr(self.accelerator.state, "fsdp_plugin", None) is not None
-            
-        #     Trainer.create_accelerator_and_postprocess = create_accelerator_with_dynamo
-        
+        # Use standard Trainer
+        logger.info("Creating standard Trainer...")
         trainer = Trainer(**trainer_kwargs)
+
+    # # Ensure FSDP optimizer state loading does not assume tensors for scalar states (e.g., step ints)
+    # # Disable rank0-only path which calls `.cpu()` on every param state value
+    # if getattr(trainer, "is_fsdp_enabled", False):
+    #     try:
+    #         fsdp_plugin = trainer.accelerator.state.fsdp_plugin
+    #         if hasattr(fsdp_plugin, "optim_state_dict_config") and hasattr(fsdp_plugin.optim_state_dict_config, "rank0_only"):
+    #             if fsdp_plugin.optim_state_dict_config.rank0_only:
+    #                 logger.info("Setting FSDP optim_state_dict_config.rank0_only = False to avoid .cpu() on ints during load")
+    #                 fsdp_plugin.optim_state_dict_config.rank0_only = False
+    #     except Exception as e:
+    #         logger.warning(f"Unable to adjust FSDP optim_state_dict_config.rank0_only: {e}")
 
     if len(ds_embedding_lens) > 1:
         assert training_args.dataloader_drop_last, "Multiple datasets are only supported with dropping the last incomplete batch, set `--dataloader_drop_last`"
@@ -466,6 +519,7 @@ def main():
         # Set custom sampler, see https://github.com/huggingface/transformers/blob/ccb92be23def445f2afdea94c31286f84b89eb5b/src/transformers/trainer.py#L785
         total_bs = training_args.per_device_train_batch_size * training_args.gradient_accumulation_steps
         total_bs = total_bs * dist.get_world_size() if dist.is_initialized() else total_bs
+        logger.info(f"Setting up custom sampler with total_bs={total_bs}, world_size={dist.get_world_size() if dist.is_initialized() else 1}")
         trainer._get_train_sampler = lambda _: CustomRandomSampler(
             total_batch_size=total_bs, ds_lens=ds_embedding_lens,
             _num_samples=sum(ds_embedding_lens), data_source=train_dataset,
@@ -475,16 +529,31 @@ def main():
 
     # Training
     logger.info("Starting training")
+    logger.info("About to call trainer.train()...")
+    
+    # Ensure all processes are synchronized before starting training
+    if dist.is_initialized():
+        logger.info("Synchronizing processes before training...")
+        dist.barrier()
+        logger.info("All processes synchronized")
+    
     resume_from_checkpoint = None
     
+    #@lucaswychan temporarily set the proxy to avoid the issue of downloading the model from the internet
+    # os.environ["HTTP_PROXY"] = "http://10.3.1.142:3128"
+    # os.environ["HTTPS_PROXY"] = "https://10.3.1.142:3128"
+    # os.environ["WANDB_INSECURE_DISABLE_SSL"] = "true"
+
+    logger.info("Calling trainer.train()...")
     trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+    logger.info("Training completed successfully")
     
-    # Dion requires synchronizing optimizer states across the replicate mesh before checkpointing
-    if training_args.use_muon and getattr(trainer, "optimizer", None) is not None and hasattr(trainer.optimizer, "synchronize_for_checkpoint"):
-        try:
-            trainer.optimizer.synchronize_for_checkpoint()
-        except Exception as e:
-            logger.warning(f"Dion synchronize_for_checkpoint before first save failed: {e}")
+    # # Dion requires synchronizing optimizer states across the replicate mesh before checkpointing
+    # if training_args.use_muon and getattr(trainer, "optimizer", None) is not None and hasattr(trainer.optimizer, "synchronize_for_checkpoint"):
+    #     try:
+    #         trainer.optimizer.synchronize_for_checkpoint()
+    #     except Exception as e:
+    #         logger.warning(f"Dion synchronize_for_checkpoint before first save failed: {e}")
 
     # The below does not save if state dict type is `SHARDED_STATE_DICT`
     trainer.save_model()

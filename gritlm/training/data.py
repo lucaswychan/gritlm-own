@@ -169,6 +169,12 @@ class CustomCollator(DataCollatorWithPadding):
     assistant_eos: str = ""
 
     prefixlm: bool = False
+    
+    def __post_init__(self):
+        # Cache for tokenization patterns to avoid repeated string operations
+        self._base_embed_prefix = self.base_bos + self.embed_bos.lstrip()
+        self._user_embed_prefix = self.base_bos + self.user_bos
+        self._embed_suffix = self.user_eos + self.embed_bos
 
     def __call__(self, features):
         query = [f[0] for f in features]
@@ -185,38 +191,45 @@ class CustomCollator(DataCollatorWithPadding):
         #@ lucaswychan remove .strip("\t\n :")
         q_instruction_lens, g_instruction_lens = None, None
         if isinstance(query[0], (tuple, list)):
-            q_instruction_lens = [
-                len(self.tokenizer.tokenize(
-                    self.base_bos + self.user_bos + f[0] + self.user_eos + self.embed_bos
-                    if f[0] else self.base_bos + self.embed_bos.lstrip()
-                )) for f in query
-            ]
+            # Pre-build all query strings first for batch tokenization
+            query_strs = []
+            instr_strs = []
+            for f in query:
+                if f[0]:
+                    instr_str = self._user_embed_prefix + f[0] + self._embed_suffix
+                    query_str = instr_str + f[1] + self.embed_eos
+                else:
+                    instr_str = self._base_embed_prefix
+                    query_str = instr_str + f[1] + self.embed_eos
+                instr_strs.append(instr_str)
+                query_strs.append(query_str)
             
-            # Strip including `:` which is added in MEDI but no longer needed due to the format with special tokens
-            query = [
-                self.base_bos + self.user_bos + f[0] + self.user_eos + self.embed_bos + f[1] + self.embed_eos
-                if f[0] else self.base_bos + self.embed_bos.lstrip() + f[1] + self.embed_eos for f in query
-            ]
+            # Batch tokenize instruction strings for better performance
+            q_instruction_lens = [len(self.tokenizer.tokenize(s)) for s in instr_strs]
+            query = query_strs
 
             #@lucaswychan add checking of passage type, since original approach will assume there is instruction in the passage
             # if the query has instruction, then the passage will also have instruction
             # and will not work for the case where there is no instruction in the passage
             # and in our case we have no instruction in the passage
             if isinstance(passage[0], (tuple, list)):
-                d_instruction_lens = [
-                    len(self.tokenizer.tokenize(
-                        self.base_bos + self.user_bos + f[0] + self.user_eos + self.embed_bos
-                        if f[0] else self.base_bos + self.embed_bos.lstrip()
-                    )) for f in passage
-                ]
+                passage_strs = []
+                passage_instr_strs = []
+                for f in passage:
+                    if f[0]:
+                        instr_str = self._user_embed_prefix + f[0] + self._embed_suffix
+                        passage_str = instr_str + f[1] + self.embed_eos
+                    else:
+                        instr_str = self._base_embed_prefix
+                        passage_str = instr_str + f[1] + self.embed_eos
+                    passage_instr_strs.append(instr_str)
+                    passage_strs.append(passage_str)
                 
-                passage = [
-                    self.base_bos + self.user_bos + f[0] + self.user_eos + self.embed_bos + f[1] + self.embed_eos
-                    if f[0] else self.base_bos + self.embed_bos.lstrip() + f[1] + self.embed_eos for f in passage
-                ]
+                d_instruction_lens = [len(self.tokenizer.tokenize(s)) for s in passage_instr_strs]
+                passage = passage_strs
             else:
                 d_instruction_lens = []
-                passage = [self.base_bos + self.embed_bos.lstrip() + f + self.embed_eos for f in passage]
+                passage = [self._base_embed_prefix + f + self.embed_eos for f in passage]
         
         # logger.info(f"passage: {passage}")
 

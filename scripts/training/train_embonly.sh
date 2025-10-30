@@ -72,7 +72,7 @@ export CMD=" \
     --warmup_ratio 0.03 \
     --num_train_epochs 1 \
     --per_device_train_batch_size 512 \
-    --gradient_accumulation_steps 1 \
+    --gradient_accumulation_steps 2 \
     --dataloader_drop_last \
     --normalized \
     --temperature 0.02 \

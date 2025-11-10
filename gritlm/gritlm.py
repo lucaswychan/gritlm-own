@@ -3,44 +3,33 @@ from typing import Dict, List, Union, cast
 import numpy as np
 import torch
 from tqdm import tqdm
-from transformers import AutoModel, AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModel, AutoTokenizer
 
 
 class GritLM(torch.nn.Module):
     def __init__(
         self,
         model_name_or_path: str = None,
-        mode: str = 'unified', # One of ['unified', 'embedding', 'generative']        
         pooling_method: str = 'mean', # One of ['cls', 'lasttoken', 'mean', 'weightedmean']
         normalized: bool = True,
         projection: int = None,
         is_inference: bool = True,
         embed_eos: str = "",
-        attn: str = 'bbcc',
+        attn: str = 'bb',
         device: str = "cuda" if torch.cuda.is_available() else "cpu",
         **kwargs, # Passed to the model, e.g. `attn_implementation`, `torch_dtype` etc.
     ) -> None:
         super().__init__()
-        if mode == 'embedding':
-            if any([x in model_name_or_path for x in ['gtr', 't5', 'instructor']]):
-                # Somehow AutoModel does not pick the right one by default
-                from transformers import T5EncoderModel
-                self.model = T5EncoderModel.from_pretrained(model_name_or_path, **kwargs)
-            else:
-                self.model = AutoModel.from_pretrained(model_name_or_path, trust_remote_code=True, **kwargs)
-                self.model.config.use_cache = False
-                print(f"Model dtype: {self.model.dtype}")
-            self.embedding_attr = None
+        # Only embedding mode is supported
+        if any([x in model_name_or_path for x in ['gtr', 't5', 'instructor']]):
+            # Somehow AutoModel does not pick the right one by default
+            from transformers import T5EncoderModel
+            self.model = T5EncoderModel.from_pretrained(model_name_or_path, **kwargs)
         else:
-            self.model = AutoModelForCausalLM.from_pretrained(model_name_or_path, trust_remote_code=True, **kwargs)
-            self.generate = self.model.generate
-
-            if hasattr(self.model, 'model'): # LLama2 & Mistral
-                self.embedding_attr = 'model'
-            elif hasattr(self.model, 'transformer'): # GPT-Neo & GPT-J
-                self.embedding_attr = 'transformer'
-            else: 
-                raise ValueError("Could not find attribute to use for embedding: ", self.model)
+            self.model = AutoModel.from_pretrained(model_name_or_path, trust_remote_code=True, **kwargs)
+            self.model.config.use_cache = False
+            print(f"Model dtype: {self.model.dtype}")
+        self.embedding_attr = None
 
         self.projection = torch.nn.Linear(
             in_features=self.model.config.hidden_size, 
@@ -53,10 +42,10 @@ class GritLM(torch.nn.Module):
         self.num_gpus = 1
         self.embed_eos = embed_eos
         self.attn = attn
-        if (self.attn is not None) and self.attn not in ['bbcc', 'cccc', 'bb', 'cc']:
-            raise ValueError(f"Mixed attention no longer supported: {self.attn}. Only bbcc, cccc, bb, cc are supported")
+        if (self.attn is not None) and self.attn not in ['bb', 'cc']:
+            raise ValueError(f"Only bidirectional (bb) or causal (cc) attention supported for embedding mode")
 
-        print(f"Created GritLM: {self.model.dtype} dtype, {pooling_method} pool, {mode} mode, {attn} attn")
+        print(f"Created GritLM (Embedding Mode): {self.model.dtype} dtype, {pooling_method} pool, {attn} attn")
 
         if is_inference:
             # Padding side right is necessary for `embed_instruction` to index correctly
@@ -70,7 +59,7 @@ class GritLM(torch.nn.Module):
             if not("device_map" in kwargs) and not(kwargs.get("load_in_4bit", False)) and not(kwargs.get("load_in_8bit", False)):
                 self.model.to(self.device)
                 # Parallelize embedding model unless a specific device is specified, e.g. `cuda:1`
-                if (mode == 'embedding') and ((isinstance(self.device, str) is False) or (":" not in self.device)):
+                if (isinstance(self.device, str) is False) or (":" not in self.device):
                     self.num_gpus = torch.cuda.device_count()
                     if self.num_gpus > 1:
                         print(f"----------Using {self.num_gpus} data-parallel GPUs----------")
@@ -128,13 +117,17 @@ class GritLM(torch.nn.Module):
                 add_special_tokens=add_special_tokens,
             ).to(self.device)
 
-            if (self.attn is not None) and (self.attn[:2] == 'bb'):
-                inputs["is_causal"] = False
+            if self.attn is not None:
+                if self.attn == 'bb':
+                    inputs["is_causal"] = False
+                #@lucaswychan here we explicitly set the attention mode to causal, since the default is bidirectional
+                elif self.attn == 'cc':
+                    inputs["is_causal"] = True
+                else:
+                    raise ValueError(f"Unknown attention mode: {self.attn}")
             if get_cache:
                 inputs['use_cache'] = True
-            outputs = (
-                getattr(self.model, self.embedding_attr) if self.embedding_attr else self.model
-            )(**inputs)
+            outputs = self.model(**inputs)
             last_hidden_state = outputs[0]
             if get_cache:
                 # Tuple of `tuple(torch.FloatTensor)` of length `config.n_layers`, with each tuple having 2 tensors of shape `(batch_size, num_heads, sequence_length, embed_size_per_head)`

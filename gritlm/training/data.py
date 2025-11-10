@@ -16,132 +16,66 @@ logger = logging.getLogger(__name__)
 class CustomDataset(torch.utils.data.Dataset):
     def __init__(
         self,
-        dataset: Union[datasets.Dataset, List[datasets.Dataset]],
+        dataset: datasets.Dataset,
         args: DataArguments,
         tokenizer: PreTrainedTokenizer,
-        mode: str = 'embedding',
-        full_bs: int = None,
-        generative_bs: int = None,
         max_seq_len: int = 2048,
     ):
-        self.indices_emb, self.indices_gen = None, None
-        if mode == 'unified':
-            self.ds_embedding = dataset[0]
-            self.ds_generative = dataset[1]
-            self.len_embedding = len(self.ds_embedding)
-            self.len_generative = len(self.ds_generative)
-            self.total_len = max(self.len_embedding, self.len_generative)
-            if args.use_unique_indices: self.set_indices()
-        elif mode == 'embedding': 
-            self.ds_embedding = dataset
-            self.total_len = self.len_embedding = len(self.ds_embedding)
-        elif mode == 'generative': 
-            self.ds_generative = dataset
-            self.total_len = self.len_generative = len(self.ds_generative)
+        # Only embedding mode is supported
+        self.ds_embedding = dataset
+        self.total_len = self.len_embedding = len(self.ds_embedding)
         self.args = args
         self.tokenizer = tokenizer
-        self.mode = mode
 
         # Too long items will be stuck in communication so cut them on the fly
         self.max_char_len = max_seq_len * 10
 
-        self.n_samples = self.total_len * full_bs
-        if generative_bs is not None:
-            assert full_bs >= generative_bs, "Full batch size must be larger than generative batch size"
-            assert full_bs % generative_bs == 0, "Full batch size must be divisible by generative batch size"
-            self.take_nth = full_bs // generative_bs
-        else:
-            self.take_nth = 1
-
-    def set_indices(self):
-        """
-        When embedding/generative datasets are of different sizes, ensure that the smaller dataset is still
-        randomly sampled from even though the __getitem__ idx may be out of range as it is for the bigger one.
-        Do so by maintaining a set of indices to sample from which are unique for each process.
-        """
-        if self.len_embedding > self.len_generative:
-            indices_gen = list(range(self.len_generative))
-            if torch.distributed.is_initialized():
-                # world_size and rank are global (i.e. across all nodes and processes)
-                world_size = torch.distributed.get_world_size()
-                rank = torch.distributed.get_rank()
-                indices_gen = indices_gen[rank::world_size]
-            self.indices_gen = set(indices_gen)
-        elif self.len_embedding < self.len_generative:
-            indices_emb = list(range(self.len_embedding))
-            if torch.distributed.is_initialized():
-                world_size = torch.distributed.get_world_size()
-                rank = torch.distributed.get_rank()
-                indices_emb = indices_emb[rank::world_size]
-            self.indices_emb = set(indices_emb)
-
     def __len__(self):
         return self.total_len
 
-    def __getitem__(self, item) -> Tuple[BatchEncoding, List[BatchEncoding], BatchEncoding]:
+    def __getitem__(self, item) -> Tuple[BatchEncoding, List[BatchEncoding]]:
         """
-        Problems:
-        If training for >1 epoch in unified mode, the same generative & embedding samples will 
-        always be in the same batch as the same index is used for both datasets.
-        Solution:
-        Don't train for >1 epoch by duplicating the dataset you want to repeat in the folder.
-        Upon loading, each dataset is shuffled so indices will be different.
+        Returns:
+            query: Query text (str or list)
+            passages: List of passage texts [positive, neg1, neg2, ...]
         """
-        query, passages, generative = None, None, None
-        if self.mode in ["unified", "embedding"]:
-            if self.indices_emb is not None:
-                if not self.indices_emb:
-                    self.set_indices()
-                item = self.indices_emb.pop()
-            elif item >= self.len_embedding:
-                item = random.randint(0, self.len_embedding - 1)
-            query = self.ds_embedding[item]['query']
+        query = self.ds_embedding[item]['query']
 
-            if isinstance(query, str):
-                query = query[:self.max_char_len]
-            elif isinstance(query, list):
-                query = [x[:self.max_char_len] for x in query]
+        if isinstance(query, str):
+            query = query[:self.max_char_len]
+        elif isinstance(query, list):
+            query = [x[:self.max_char_len] for x in query]
+        
+        passages = []
+        pos = random.choice(self.ds_embedding[item]['pos'])
+
+        if isinstance(pos, str):
+            pos = pos[:self.max_char_len]
+        elif isinstance(pos, list):
+            pos = [x[:self.max_char_len] for x in pos]
+        else:
+            raise ValueError(f"Unexpected type for pos: {type(pos)}")
+        passages.append(pos)
+
+        if len(self.ds_embedding[item]['neg']) == 0: #@lucaswychan add checking of no negs since I may only use in-batch negs
+            negs = []
+        else:
+            if len(self.ds_embedding[item]['neg']) < self.args.train_group_size - 1:
+                num = math.ceil((self.args.train_group_size - 1) / len(self.ds_embedding[item]['neg']))
+                negs = random.sample(self.ds_embedding[item]['neg'] * num, self.args.train_group_size - 1)
+            else:
+                negs = random.sample(self.ds_embedding[item]['neg'], self.args.train_group_size - 1)
             
-            passages = []
-            pos = random.choice(self.ds_embedding[item]['pos'])
-
-            if isinstance(pos, str):
-                pos = pos[:self.max_char_len]
-            elif isinstance(pos, list):
-                pos = [x[:self.max_char_len] for x in pos]
-            else:
-                raise ValueError(f"Unexpected type for pos: {type(pos)}")
-            passages.append(pos)
-
-            if len(self.ds_embedding[item]['neg']) == 0: #@lucaswychan add checking of no negs since I may only use in-batch negs
-                negs = []
-            else:
-                if len(self.ds_embedding[item]['neg']) < self.args.train_group_size - 1:
-                    num = math.ceil((self.args.train_group_size - 1) / len(self.ds_embedding[item]['neg']))
-                    negs = random.sample(self.ds_embedding[item]['neg'] * num, self.args.train_group_size - 1)
+            for i, neg in enumerate(negs):
+                if isinstance(neg, str):
+                    negs[i] = neg[:self.max_char_len]
+                elif isinstance(neg, list):
+                    negs[i] = [x[:self.max_char_len] for x in neg]
                 else:
-                    negs = random.sample(self.ds_embedding[item]['neg'], self.args.train_group_size - 1)
-                
-                for i, neg in enumerate(negs):
-                    if isinstance(neg, str):
-                        negs[i] = neg[:self.max_char_len]
-                    elif isinstance(neg, list):
-                        negs[i] = [x[:self.max_char_len] for x in neg]
-                    else:
-                        raise ValueError(f"Unexpected type for neg: {type(neg)}")
-            passages.extend(negs)
+                    raise ValueError(f"Unexpected type for neg: {type(neg)}")
+        passages.extend(negs)
 
-        if (self.mode in ["unified", "generative"]) and (self.n_samples % self.take_nth == 0):
-            if self.indices_gen is not None:
-                if not self.indices_gen:
-                    self.set_indices()
-                item = self.indices_gen.pop()
-            elif item >= self.len_generative:
-                item = random.randint(0, self.len_generative - 1)
-            generative = self.ds_generative[item]["text"]
-
-        self.n_samples -= 1
-        return query, passages, generative
+        return query, passages
 
 @dataclass
 class CustomCollator(DataCollatorWithPadding):
@@ -152,10 +86,8 @@ class CustomCollator(DataCollatorWithPadding):
     """
     query_max_len: int = 32
     passage_max_len: int = 128
-    generative_max_len: int = 128
 
     base_bos: str = ""
-    turn_sep: str = ""
 
     user_bos: str = ""
     user_eos: str = ""
@@ -164,11 +96,6 @@ class CustomCollator(DataCollatorWithPadding):
     # Am embed eos is useless as there is no generative loss on it so it won't be learned
     # & it does not add anything new; It only makes sense for lasttoken pooling
     embed_eos: str = ""
-
-    assistant_bos: str = ""
-    assistant_eos: str = ""
-
-    prefixlm: bool = False
     
     def __post_init__(self):
         # Cache for tokenization patterns to avoid repeated string operations
@@ -179,7 +106,6 @@ class CustomCollator(DataCollatorWithPadding):
     def __call__(self, features):
         query = [f[0] for f in features]
         passage = [f[1] for f in features]
-        generative = [f[2] for f in features]
 
         # Flatten if list of lists
         if isinstance(passage[0], list):
@@ -189,7 +115,7 @@ class CustomCollator(DataCollatorWithPadding):
 
         # If each sample is a tuple it is of format (instruction, text)
         #@ lucaswychan remove .strip("\t\n :")
-        q_instruction_lens, g_instruction_lens = None, None
+        q_instruction_lens = None
         if isinstance(query[0], (tuple, list)):
             # Pre-build all query strings first for batch tokenization
             query_strs = []
@@ -230,63 +156,23 @@ class CustomCollator(DataCollatorWithPadding):
             else:
                 d_instruction_lens = []
                 passage = [self._base_embed_prefix + f + self.embed_eos for f in passage]
-        
-        # logger.info(f"passage: {passage}")
 
-        # If each sample is a tuple it is of format (instruction, text, instruction, text, ...)
-        if isinstance(generative[0], (tuple, list)):
-            # Do not strip user input as model should be robust to it
-            # Need to check for None in case gen batch size is smaller than emb batch size
-            # instruction and text are a list each, as it may be multi-turn
-            g_instruction_lens = [
-                [
-                    len(
-                        self.tokenizer.tokenize(self.user_bos + z + self.user_eos + self.assistant_bos)
-                        if i > 0 else
-                        self.tokenizer.tokenize(self.base_bos + self.user_bos + z + self.user_eos + self.assistant_bos)
-                    )
-                    if i % 2 == 0 else
-                    len(self.tokenizer.tokenize(z.strip() + self.assistant_eos))
-                    for i, z in enumerate(f[:-1])
-                ] for f in generative if f is not None
-            ]
-            generative = [
-                self.base_bos + self.turn_sep.join([
-                    self.user_bos + f[i] + self.user_eos + self.assistant_bos + f[i+1].strip() + self.assistant_eos for i in range(0, len(f), 2)
-                ]) for f in generative if f is not None
-            ]
-
-        if query[0] is not None:
-            features["query"] = self.tokenizer(
-                query,
-                padding=True,
-                truncation=True,
-                max_length=self.query_max_len,
-                return_tensors="pt",
-                add_special_tokens=False, # BOS / EOS is already in the prompt
-            )
-            features["passage"] = self.tokenizer(
-                passage,
-                padding=True,
-                truncation=True,
-                max_length=self.passage_max_len,
-                return_tensors="pt",
-                add_special_tokens=False, # BOS / EOS is already in the prompt
-            )
-            # logger.info(f"features['passage'] shape: {features['passage']['input_ids'].shape}")
-
-        if generative[0] is not None:
-            features["generative"] = self.tokenizer(
-                generative,
-                padding=True,
-                truncation=True,
-                max_length=self.generative_max_len,
-                return_tensors="pt",
-                add_special_tokens=False, # BOS / EOS is already in the prompt
-            )
-            features["generative"]["labels"] = features["generative"]["input_ids"].clone()
-            # Do not mask out the first token as it is always something & could be the pad token id (bos)
-            features["generative"]["labels"][:,1:][features["generative"]["labels"][:,1:] == self.tokenizer.pad_token_id] = -100
+        features["query"] = self.tokenizer(
+            query,
+            padding=True,
+            truncation=True,
+            max_length=self.query_max_len,
+            return_tensors="pt",
+            add_special_tokens=False, # BOS / EOS is already in the prompt
+        )
+        features["passage"] = self.tokenizer(
+            passage,
+            padding=True,
+            truncation=True,
+            max_length=self.passage_max_len,
+            return_tensors="pt",
+            add_special_tokens=False, # BOS / EOS is already in the prompt
+        )
 
         if q_instruction_lens:
             # Check that there is no mistake
@@ -299,16 +185,6 @@ class CustomCollator(DataCollatorWithPadding):
             #@lucaswychan: if there is no instruction in the passage, we don't add instruction_lens
             if d_instruction_lens:
                 features["passage"]["instruction_lens"] = torch.tensor(d_instruction_lens)
-        if g_instruction_lens:
-            # Mask instructions as -100 to be ignored in the loss
-            # If multiturn, instructions are masked in multiple places
-            for i, lengths in enumerate(g_instruction_lens):
-                cur_len = 0
-                for j, l in enumerate(lengths):
-                    # For PrefixLM mask everything up to latest assistant utterance
-                    if (j % 2 == 0) or self.prefixlm:
-                        features["generative"]["labels"][i, cur_len:cur_len+l] = -100
-                    cur_len += l
 
         return features
 

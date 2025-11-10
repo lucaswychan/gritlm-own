@@ -24,18 +24,14 @@ if is_sagemaker_mp_enabled():
     from smdistributed.modelparallel import __version__ as SMP_VERSION
 
 BASE_BOS: str = ""
-TURN_SEP: str = "\n"
 
 USER_BOS: str = ""
-USER_EOS: str = "" # "</s>" for Zephyr format
+USER_EOS: str = ""
 
 EMBED_BOS: str = ""
 # Am embed eos is useless as there is no generative loss on it so it won't be learned
 # & it does not add anything new; It only makes sense for lasttoken pooling
 EMBED_EOS: str = ""
-
-ASSISTANT_BOS: str = ""
-ASSISTANT_EOS: str = ""
 
 logger = logging.getLogger(__name__)
 
@@ -145,20 +141,15 @@ def main():
     # Set seed
     set_seed(training_args.seed)
 
-    # If embedding/unified, handle grad accumulation manually inside forward of GradCacheTrainer.
+    # If embedding mode with grad accumulation, handle it manually inside forward of GradCacheTrainer.
     gc_chunk_size = None
-    if ((training_args.gradient_accumulation_steps > 1) and \
-        (training_args.negatives_cross_device) and \
-        (training_args.mode in ["embedding", "unified"])) or \
-        (training_args.no_gen_gas and training_args.no_emb_gas):
+    if (training_args.gradient_accumulation_steps > 1) and (training_args.negatives_cross_device):
         gc_chunk_size = training_args.per_device_train_batch_size
         training_args.per_device_train_batch_size = \
             training_args.per_device_train_batch_size * training_args.gradient_accumulation_steps
         training_args.gradient_accumulation_steps = 1
 
         logger.info("Using GradCache with chunk size %d", gc_chunk_size)
-    elif (training_args.no_gen_gas or training_args.no_emb_gas):
-        raise ValueError("Cannot use no_gen_gas or no_emb_gas without GradCache")
 
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
@@ -185,25 +176,19 @@ def main():
     
     ds_name_to_samples = {}
 
-    if data_args.generative_max_len is None:
-        data_args.generative_max_len = data_args.passage_max_len
-
     for file in data_files:
         if not file.endswith(".jsonl"):
             continue
         logger.info("Loading dataset %s", file)
         tmp_ds = datasets.load_dataset('json', data_files=file, split='train')
         tmp_ds_len = len(tmp_ds)
-        # For testing, can add an origin column:
-        # origin_col = [file] * len(tmp_ds)
-        # tmp_ds = tmp_ds.add_column("origin", origin_col)
         if tmp_ds_len > data_args.max_example_num_per_dataset:
             tmp_ds = tmp_ds.select(
                 random.sample(list(range(tmp_ds_len)), data_args.max_example_num_per_dataset)
             )
         # Check if has instructions separated such that they will be masked out later
         # If so filter out samples where the instructions are too long else they will all be 0s
-        if training_args.mode in ["embedding", "unified"] and "query" in tmp_ds.features:
+        if "query" in tmp_ds.features:
             if isinstance(tmp_ds[0]['query'], (tuple, list)):
                 logger.info(f"Filtering out embedding samples with too long instructions for {file}")
                 #@lucaswychan add checking of no negs since it will affect the true label in cross entropy loss
@@ -223,12 +208,10 @@ def main():
             train_ds.append(tmp_ds)
             continue
         logger.info("Skipping dataset %s as its type could not be identified", file)
-    if training_args.mode == "embedding":
-        ds_embedding_lens = [len(t) for t in train_ds]
-        ds = datasets.concatenate_datasets(train_ds)
-        logger.info("Embedding mode: %d samples", len(ds))
-    else:
-        raise NotImplementedError(training_args.mode)
+    
+    ds_embedding_lens = [len(t) for t in train_ds]
+    ds = datasets.concatenate_datasets(train_ds)
+    logger.info("Embedding mode: %d samples", len(ds))
 
     os.makedirs(training_args.output_dir, exist_ok=True)
     with open(os.path.join(training_args.output_dir, "dataset_num_samples.json"), "w") as f:
@@ -255,13 +238,10 @@ def main():
         debiased=training_args.debiased,
         tau_plus=training_args.tau_plus,
         temperature=training_args.temperature,
-        mode=training_args.mode,
         projection=model_args.projection,
         attn=model_args.attn,
         attn_implementation=model_args.attn_implementation,
         torch_dtype=training_dtype,
-        loss_gen_type=training_args.loss_gen_type,
-        loss_gen_factor=training_args.loss_gen_factor,
         use_cache=False,
         # Critical to make Mixtral work
         low_cpu_mem_usage=True,
@@ -328,10 +308,7 @@ def main():
         ds,
         args=data_args,
         tokenizer=tokenizer,
-        mode=training_args.mode,
-        full_bs=training_args.per_device_train_batch_size,
-        generative_bs=training_args.per_device_generative_bs,
-        max_seq_len=max(data_args.query_max_len, data_args.passage_max_len, data_args.generative_max_len),
+        max_seq_len=max(data_args.query_max_len, data_args.passage_max_len),
     )
     
     optimizer = None
@@ -441,16 +418,11 @@ def main():
         tokenizer,
         query_max_len=data_args.query_max_len,
         passage_max_len=data_args.passage_max_len,
-        generative_max_len=data_args.generative_max_len,
         base_bos=BASE_BOS,
-        turn_sep=TURN_SEP,
         user_bos=USER_BOS,
         user_eos=USER_EOS,
         embed_bos=EMBED_BOS,
         embed_eos=embed_eos,
-        assistant_bos=ASSISTANT_BOS,
-        assistant_eos=ASSISTANT_EOS,
-        prefixlm=data_args.prefixlm
     )
     
     logger.info("Preparing trainer kwargs...")
@@ -466,17 +438,13 @@ def main():
     # Choose trainer based on configuration
     if training_args.use_ring_loss:
         # Use Ring-based trainer (more efficient, no GradCache needed)
-        # Only supports embedding mode
-        if training_args.mode != 'embedding':
-            raise ValueError(f"RingTrainer only supports 'embedding' mode, got '{training_args.mode}'")
-        
         logger.info(f"Creating RingTrainer with head_dim={training_args.ring_head_dim}, use_inf_loss={training_args.use_inf_loss}")
         trainer = RingTrainer(**trainer_kwargs)
         # Set ring-specific attributes
         trainer.temperature = training_args.temperature
         trainer.use_inf_loss = training_args.use_inf_loss
         trainer.head_dim = training_args.ring_head_dim
-        logger.info(f"RingTrainer initialized (embedding mode only) with "
+        logger.info(f"RingTrainer initialized with "
                    f"temperature={training_args.temperature}, "
                    f"use_inf_loss={training_args.use_inf_loss}, "
                    f"head_dim={training_args.ring_head_dim}")
@@ -488,9 +456,6 @@ def main():
         logger.info("GradCacheTrainer initialized successfully")
         trainer.gc_chunk_size = gc_chunk_size
         trainer.emb_loss_fn = model.emb_loss_fn
-        trainer.mode = training_args.mode
-        trainer.no_gen_gas = training_args.no_gen_gas
-        trainer.no_emb_gas = training_args.no_emb_gas
         trainer.split_emb = training_args.split_emb
         trainer.split_emb_full = training_args.split_emb_full
         trainer.emb_p_only = training_args.emb_p_only

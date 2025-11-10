@@ -519,36 +519,33 @@ class GradCacheTrainer(Trainer):
         logger.info(f"  Number of trainable parameters = {get_model_param_count(model, trainable_only=True):,}")
 
         ### MODIFIED START ###
-        if not self.no_emb_gas:
-            dtype = None
-            if self.args.bf16:
-                dtype = torch.bfloat16
-            elif self.args.fp16:
-                dtype = torch.float16
-            import os
-            if os.getenv("BF16", False):
-                gc = GradCache(
-                    models=[model, model, model],             
-                    chunk_sizes=self.gc_chunk_size, 
-                    loss_fn=self.emb_loss_fn,
-                    # Somehow autocast turns bf16 -> fp32 here, so cast back if training in bf16
-                    get_rep_fn=lambda x: x["q_reps"].to(dtype=dtype) if dtype is not None else x["q_reps"],
-                )
-            else:
-                gc = GradCache(
-                    models=[model, model, model],             
-                    chunk_sizes=self.gc_chunk_size, 
-                    loss_fn=self.emb_loss_fn,
-                    get_rep_fn=lambda x: x["q_reps"],
-                )
-            # If using the .encode function instead, the below does work with FSDP
-            # Somehow FSDP requires it to be the forward function
-            def model_call(self, model, model_input): return model(model_input)
-            gc.model_call = model_call.__get__(gc)
-            no_sync_except_last = torch.distributed.is_initialized()
-
-        if self.no_emb_gas or self.no_gen_gas:
-            assert self.accelerator.gradient_accumulation_steps == 1, "GAS should have been set to 1"
+        # Initialize GradCache for embedding training
+        dtype = None
+        if self.args.bf16:
+            dtype = torch.bfloat16
+        elif self.args.fp16:
+            dtype = torch.float16
+        import os
+        if os.getenv("BF16", False):
+            gc = GradCache(
+                models=[model, model, model],             
+                chunk_sizes=self.gc_chunk_size, 
+                loss_fn=self.emb_loss_fn,
+                # Somehow autocast turns bf16 -> fp32 here, so cast back if training in bf16
+                get_rep_fn=lambda x: x["q_reps"].to(dtype=dtype) if dtype is not None else x["q_reps"],
+            )
+        else:
+            gc = GradCache(
+                models=[model, model, model],             
+                chunk_sizes=self.gc_chunk_size, 
+                loss_fn=self.emb_loss_fn,
+                get_rep_fn=lambda x: x["q_reps"],
+            )
+        # If using the .encode function instead, the below does work with FSDP
+        # Somehow FSDP requires it to be the forward function
+        def model_call(self, model, model_input): return model(model_input)
+        gc.model_call = model_call.__get__(gc)
+        no_sync_except_last = torch.distributed.is_initialized()
 
         ### MODIFIED END ###
 
@@ -687,186 +684,103 @@ class GradCacheTrainer(Trainer):
                         else contextlib.nullcontext
                     )
                     with context():
-                        ### MODIFIED START ###
-                        #tr_loss_step = self.training_step(model, inputs)
+                        ### MODIFIED START - Embedding mode only ###
                         model.train()
                         inputs = self._prepare_inputs(inputs)
 
-                        # Do generative first, as emb contains an all-reduce.
-                        # This is slightly faster (181.60s/it vs 201.94s/it)
-                        if self.mode in ["unified", "generative"]:
-                            # Handle grad accumulation if unified
-                            # Sometimes it is not necessary cuz gen bs is much smaller than emb bs
-                            if self.no_gen_gas:
-                                loss_gen = self.get_loss_no_gas(model=model, generative=inputs["generative"])
-                                
-                                #with self.compute_loss_context_manager():
-                                #    loss_gen = model(generative=inputs["generative"]).loss_gen
-                                #if self.args.n_gpu > 1:
-                                #    loss_gen = loss_gen.mean()  # mean() to average on multi-gpu parallel training
-
-                                #if self.use_apex:
-                                #    with amp.scale_loss(loss_gen, self.optimizer) as scaled_loss:
-                                #        scaled_loss.backward()
-                                #else:
-                                #    self.accelerator.backward(loss_gen)
-
-                                #loss_gen = model(generative=inputs["generative"]).loss_gen
-                                #loss_gen.backward()
-                                #loss_gen = loss_gen.detach()
-                            else:
-                                loss_gen = torch.tensor(0.0, device=args.device)
-                                chunks = gc.split_inputs(inputs["generative"], self.gc_chunk_size)
-                                for chunk in chunks:
-                                    loss_gen_chunk = model(generative=chunk).loss_gen / len(chunks)
-                                    # This is fine as long as no DeepSpeed / Megatron-LM / loss scaling is used
-                                    # https://github.com/huggingface/accelerate/blob/00301b27b75951b6105f2d1a1c4e677a57aba0cd/src/accelerate/accelerator.py#L1961
-                                    loss_gen_chunk.backward()
-                                    loss_gen += loss_gen_chunk.detach()
-
-                        if self.mode in ["unified", "embedding"]:
-                            # Split up the embedding forward to save memory eq to ~1 batch size
-                            # at the cost of one additional query forward pass
-                            if self.split_emb:
-                                # Do backprop on passages first as they are more expensive
-                                # & we can reuse them this way
-                                # logger.info(f"model dtype: {model.model.dtype}")
-                                # logger.info(f"query shape in split_emb: {inputs['query']['input_ids'].shape}")
-                                # logger.info(f"passage shape in split_emb: {inputs['passage']['input_ids'].shape}")
-                                loss_emb_p, p_reps = self.get_loss_no_gas(
-                                    model=model,
-                                    query=inputs["query"], 
-                                    passage=inputs["passage"], 
-                                    q_grad=False,
-                                    get_preps=True,
-                                    #loss_mult=2/3,
-                                )
-
-                                loss_emb_q = self.get_loss_no_gas(
-                                    model=model,
-                                    query=inputs["query"],
-                                    p_reps=p_reps,
-                                    p_grad=False,
-                                    #loss_mult=1/3,
-                                )
-                                # logger.info(f"loss_emb_p dtype: {loss_emb_p.dtype}")
-                                # logger.info(f"loss_emb_q dtype: {loss_emb_q.dtype}")
-
-                                assert torch.allclose(loss_emb_q, loss_emb_p), f"{loss_emb_q} != {loss_emb_p}"
-                                loss_emb = loss_emb_q
-                            
-                            elif self.split_emb_full:
-                                with self.compute_loss_context_manager():
-                                    out = model(query=inputs["query"], passage=inputs["passage"], q_grad=False, pos_grad=False)
-                                    loss, q_reps, p_reps = out.loss, out.q_reps, out.p_reps
-                                    p_reps = p_reps.detach()
-                                    
-                                if self.args.n_gpu > 1:
-                                    loss = loss.mean()  # mean() to average on multi-gpu parallel training
-
-                                if self.use_apex:
-                                    with amp.scale_loss(loss, self.optimizer) as scaled_loss:
-                                        scaled_loss.backward()
-                                else:
-                                    self.accelerator.backward(loss)
-
-                                loss, q_reps, p_reps = loss.detach(), q_reps.detach(), p_reps.detach()
-
-                                ##
-
-                                with self.compute_loss_context_manager():
-                                    loss = model(q_reps=q_reps, passage=inputs["passage"], p_reps=p_reps, q_grad=False, neg_grad=False).loss
-                                    
-                                if self.args.n_gpu > 1:
-                                    loss = loss.mean()  # mean() to average on multi-gpu parallel training
-
-                                if self.use_apex:
-                                    with amp.scale_loss(loss, self.optimizer) as scaled_loss:
-                                        scaled_loss.backward()
-                                else:
-                                    self.accelerator.backward(loss)
-
-                                loss = loss.detach()
-
-                                ##
-
-                                with self.compute_loss_context_manager():
-                                    loss = model(query=inputs["query"], p_reps=p_reps, pos_grad=False, neg_grad=False).loss
-                                    
-                                if self.args.n_gpu > 1:
-                                    loss = loss.mean()  # mean() to average on multi-gpu parallel training
-
-                                if self.use_apex:
-                                    with amp.scale_loss(loss, self.optimizer) as scaled_loss:
-                                        scaled_loss.backward()
-                                else:
-                                    self.accelerator.backward(loss)
-
-                                loss_emb = loss.detach()
-
-                            # The below two are incompatible w/ Grad Checkpointing
-                            elif self.emb_q_only:
-                                loss_emb = self.get_loss_no_gas(
-                                    model=model,
-                                    query=inputs["query"], 
-                                    passage=inputs["passage"], 
-                                    p_grad=False,
-                                )
-                            elif self.emb_p_only:
-                                loss_emb = self.get_loss_no_gas(
-                                    model=model,
-                                    query=inputs["query"], 
-                                    passage=inputs["passage"], 
-                                    q_grad=False,
-                                )
-
-                            elif self.no_emb_gas:
-                                loss_emb = self.get_loss_no_gas(model=model, query=inputs["query"], passage=inputs["passage"])
-
-                                #with self.compute_loss_context_manager():
-                                #    loss_emb = model(query=inputs["query"], passage=inputs["passage"]).loss_emb
-                                #if self.args.n_gpu > 1:
-                                #    loss_emb = loss_emb.mean()  # mean() to average on multi-gpu parallel training
-
-                                #if self.use_apex:
-                                #    with amp.scale_loss(loss_emb, self.optimizer) as scaled_loss:
-                                #        scaled_loss.backward()
-                                #else:
-                                #    self.accelerator.backward(loss_emb)
-
-                                #loss_emb = model(query=inputs["query"], passage=inputs["passage"]).loss_emb
-                                #loss_emb.backward()
-                                #loss_emb = loss_emb.detach()
-                            else:
-                                # This is not compatible w/ DeepSpeed / Megatron-LM / loss scaling
-                                loss_emb = gc(inputs["query"], inputs["passage"], no_sync_except_last=no_sync_except_last)
-
-    #                    Debugging help
-    #                    if torch.distributed.is_initialized():
-    #                        if torch.distributed.get_rank() == 0:
-    #                            import pdb; pdb.set_trace()
-    #                        torch.distributed.barrier()
-    #                    else:
-    #                        import pdb; pdb.set_trace()
-
-                        if self.mode == 'unified':
-                            tr_loss_step = loss_emb + loss_gen
-
-                            self.state.loss_emb = getattr(
-                                self.state, "loss_emb", torch.tensor(0.0).to(loss_emb.device)
+                        # Split up the embedding forward to save memory eq to ~1 batch size
+                        # at the cost of one additional query forward pass
+                        if self.split_emb:
+                            # Do backprop on passages first as they are more expensive
+                            # & we can reuse them this way
+                            loss_emb_p, p_reps = self.get_loss_no_gas(
+                                model=model,
+                                query=inputs["query"], 
+                                passage=inputs["passage"], 
+                                q_grad=False,
+                                get_preps=True,
                             )
-                            self.state.loss_gen = getattr(
-                                self.state, "loss_gen", torch.tensor(0.0).to(loss_emb.device)
+
+                            loss_emb_q = self.get_loss_no_gas(
+                                model=model,
+                                query=inputs["query"],
+                                p_reps=p_reps,
+                                p_grad=False,
                             )
-                            self.state.loss_emb += loss_emb
-                            self.state.loss_gen += loss_gen
+
+                            assert torch.allclose(loss_emb_q, loss_emb_p), f"{loss_emb_q} != {loss_emb_p}"
+                            loss_emb = loss_emb_q
                         
+                        elif self.split_emb_full:
+                            with self.compute_loss_context_manager():
+                                out = model(query=inputs["query"], passage=inputs["passage"], q_grad=False, pos_grad=False)
+                                loss, q_reps, p_reps = out.loss, out.q_reps, out.p_reps
+                                p_reps = p_reps.detach()
+                                
+                            if self.args.n_gpu > 1:
+                                loss = loss.mean()  # mean() to average on multi-gpu parallel training
 
-                        elif self.mode == 'embedding':
-                            tr_loss_step = loss_emb
+                            if self.use_apex:
+                                with amp.scale_loss(loss, self.optimizer) as scaled_loss:
+                                    scaled_loss.backward()
+                            else:
+                                self.accelerator.backward(loss)
 
-                        elif self.mode == 'generative':
-                            tr_loss_step = loss_gen
+                            loss, q_reps, p_reps = loss.detach(), q_reps.detach(), p_reps.detach()
+
+                            ##
+
+                            with self.compute_loss_context_manager():
+                                loss = model(q_reps=q_reps, passage=inputs["passage"], p_reps=p_reps, q_grad=False, neg_grad=False).loss
+                                
+                            if self.args.n_gpu > 1:
+                                loss = loss.mean()  # mean() to average on multi-gpu parallel training
+
+                            if self.use_apex:
+                                with amp.scale_loss(loss, self.optimizer) as scaled_loss:
+                                    scaled_loss.backward()
+                            else:
+                                self.accelerator.backward(loss)
+
+                            loss = loss.detach()
+
+                            ##
+
+                            with self.compute_loss_context_manager():
+                                loss = model(query=inputs["query"], p_reps=p_reps, pos_grad=False, neg_grad=False).loss
+                                
+                            if self.args.n_gpu > 1:
+                                loss = loss.mean()  # mean() to average on multi-gpu parallel training
+
+                            if self.use_apex:
+                                with amp.scale_loss(loss, self.optimizer) as scaled_loss:
+                                    scaled_loss.backward()
+                            else:
+                                self.accelerator.backward(loss)
+
+                            loss_emb = loss.detach()
+
+                        # The below two are incompatible w/ Grad Checkpointing
+                        elif self.emb_q_only:
+                            loss_emb = self.get_loss_no_gas(
+                                model=model,
+                                query=inputs["query"], 
+                                passage=inputs["passage"], 
+                                p_grad=False,
+                            )
+                        elif self.emb_p_only:
+                            loss_emb = self.get_loss_no_gas(
+                                model=model,
+                                query=inputs["query"], 
+                                passage=inputs["passage"], 
+                                q_grad=False,
+                            )
+                        else:
+                            # Standard GradCache for embedding training
+                            # This is not compatible w/ DeepSpeed / Megatron-LM / loss scaling
+                            loss_emb = gc(inputs["query"], inputs["passage"], no_sync_except_last=no_sync_except_last)
+
+                        tr_loss_step = loss_emb
                         ### MODIFIED END ###
 
                     if (

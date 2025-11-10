@@ -37,8 +37,7 @@ class DataArguments:
     train_data: str = field(
         default=None,
         metadata={
-            "help": "Path to folder or file with training data. For toy data in instruction format"
-                    " point to `toy_data_instruct` instead. If the path is a folder, for each minibatch"
+            "help": "Path to folder or file with training data. If the path is a folder, for each minibatch"
                     " all samples will come from one file in the folder. You can use this to ensure"
                     " in-batch negatives are very difficult."
         }
@@ -67,25 +66,12 @@ class DataArguments:
                     " than this will be truncated, sequences shorter will be padded."
         },
     )
-    generative_max_len: int = field(
-        default=None,
-        metadata={
-            "help": "The maximum total input sequence length after tokenization for generative. Sequences longer"
-                    " than this will be truncated, sequences shorter will be padded. Defaults to --passage_max_len"
-        },
-    )
     max_example_num_per_dataset: int = field(
         default=100_000_000, metadata={"help": "the max number of examples for each dataset"}
     )
     num_samples: Optional[str] = field(
         default=None, metadata={"help": "path to json with number of samples per dataset"}
-    )    
-    use_unique_indices: bool = field(
-        default=False, 
-        metadata={"help": "If unified with different emb & gen dataset lens, ensure samples are unique in each epoch"}
     )
-    prefixlm: bool = field(default=False, metadata={"help": "PrefixLM for generative"})
-
 
     def __post_init__(self):
         if not os.path.exists(self.train_data):
@@ -106,45 +92,6 @@ class CustomTrainingArguments(TrainingArguments):
             " A higher temperature can reduce the value of similarity between texts in downstream tasks."
         }
     )
-    mode: str = field(
-        default='embedding', 
-        metadata={
-            "help": "One of ['unified', 'embedding', 'generative']. For unified,"
-            " `train_data` should point to a folder with both embedding and generative data."
-        }
-    )
-    per_device_generative_bs: int = field(
-        default=None, 
-        metadata={
-            "help": "Per device generative batch size. It has to be smaller than the regular batch size."
-                    " It will overwrite the gradient accumulation steps for generative."
-                    " It only makes sense to use this argument when doing unified mode."
-        }
-    )
-    no_gen_gas: bool = field(
-        default=False, 
-        metadata={
-            "help": "Do not use gradient accumulation steps for generative."
-            " Using both `no_gen_gas` and `no_emb_gas` will activate the GradCache Trainer"
-            " but without gradient accumulation. This is useful for saving memory as it"
-            " computes the backward for embedding first and then the backward for generative"
-            " which is more memory efficient than the default of computing both losses,"
-            " adding them and then doing the backward (https://stackoverflow.com/questions/53994625/how-can-i-process-multi-loss-in-pytorch)."
-        }
-    )
-    no_emb_gas: bool = field(
-        default=False, 
-        metadata={
-            "help": "Do not use gradient accumulation steps for embedding."
-            " Using both `no_gen_gas` and `no_emb_gas` will activate the GradCache Trainer"
-            " but without gradient accumulation. This is useful for saving memory as it"
-            " computes the backward for embedding first and then the backward for generative"
-            " which is more memory efficient than the default of computing both losses,"
-            " adding them and then doing the backward (https://stackoverflow.com/questions/53994625/how-can-i-process-multi-loss-in-pytorch)."
-        }
-    )
-    loss_gen_factor: float = field(default=1.0, metadata={"help": "Factor to scale generative loss by"})
-    loss_gen_type: str = field(default="mixed", metadata={"help": "Type of gen loss: mixed/token"})
     lora: bool = field(default=False, metadata={"help": "Use LoRA PEFT"})
     qlora: bool = field(default=False, metadata={"help": "Use QLoRA PEFT"})
     save_safetensors: bool = field(default=False, metadata={"help": "Save in safetensors format"})

@@ -1,8 +1,16 @@
-## Generative Representational Instruction Tuning
+<div align="center">
 
-![](visuals/octopus.jpg)
+# Do Reasoning Models Enhance Embedding Models? 
+## (Training Codes Repository)
 
-This repository provides all materials for the paper [Generative Representational Instruction Tuning](https://arxiv.org/abs/2402.09906). We continue developing the repository and welcome any contributions. If you want to use the code in the exact same way as in the paper, please use the 1.0.0 release (commit hash = `3ac39052ef878371a658a060e69f9c0124bfd59b`). [63min video](https://www.youtube.com/watch?v=JAaua0jNIdA&t=1748s&pp=ygUuZ2VuZXJhdGl2ZSByZXByZXNlbnRhdGlvbmFsIGluc3RydWN0aW9uIHR1bmluZw%3D%3D) & [30min video](https://www.youtube.com/watch?v=wC7CdhtAMnk) on the paper by Niklas Muennighoff; [60min slides link](https://docs.google.com/presentation/d/1aHwDQaGfy2Dg6r68uRH7kFOuTKka3tzZzEIZIf35VNM/edit?usp=sharing&resourcekey=0-q6APQHTzHtB6jqYa-Snk2g).
+<p align="center">🏆  <a href="https://github.com/lucaswychan">Arxiv Paper</a>&nbsp&nbsp | &nbsp&nbsp🤗 <a href="https://huggingface.co/collections/lucaswychan/reasoning-embedding">Hugging Face</a></p> 
+
+
+<img src="assests/re-thumbnail.png" alt="thumbnail" width="400">
+
+</div>
+
+This repository is the training code for the embedding model used in the paper 'Do Reasoning Models Enhance Embedding Models'. We greatly thanks the work from [Generative Representational Instruction Tuning](https://arxiv.org/abs/2402.09906). In the original GritLM implementation, they consider both embedding and generative training setting. In our work, however, we discard all generative settings as it is not necessary to train the embedding models.
 
 - [Inference](#inference)
     - [Basic](#basic)

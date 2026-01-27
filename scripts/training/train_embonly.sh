@@ -24,7 +24,7 @@ export CUDA_VISIBLE_DEVICES=0,5,6,7
 export GPUS_PER_NODE=4
 
 export TORCH_CUDA_ARCH_LIST="8.9"
-export HF_HOME=/data/wychanbu/huggingface
+export HF_HOME=~/.cache/hugginface
 
 # Optimized NCCL settings for multi-GPU training
 # export NCCL_P2P_DISABLE=1 

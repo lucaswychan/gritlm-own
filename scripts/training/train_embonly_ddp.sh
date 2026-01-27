@@ -16,7 +16,7 @@ cd /home/wychanbu/gritlm/gritlm
 source /home/wychanbu/gritlm/.gritvenv/bin/activate
 # export WANDB_PROJECT="gritlm"
 export CUDA_VISIBLE_DEVICES=4,5,6,7
-export HF_HOME=/data/wychanbu/huggingface
+export HF_HOME=~/.cache/hugginface
 export NCCL_P2P_DISABLE=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 # Training setup
